@@ -28,7 +28,7 @@ def data2abspoints(data):
         abs_y +=offset_y
         if next_is_gap==0:
             abspoints.append([begin_point,end_point])
-	else:
+        else:
             abspoints.append([begin_point,begin_point])
         next_is_gap = line_data[2]
 

@@ -28,7 +28,7 @@ FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string(
     'data_dir',
-    '/import/vision-datasets001/kl303/PG_data/PG_ndjson/fine_tuning1/',
+    'SketchX-PRIS-Dataset/Perceptual_Grouping/',
     'The directory in which to find the dataset specified in model hparams. '
     'If data_dir starts with "http://" or "https://", the file will be fetched '
     'remotely.')
@@ -749,7 +749,7 @@ class PG_cluster_Rnn():
 
             average_group+=len(C)
             category_idx = test_idx / 100
-            print test_idx#,len(C)
+            # print (test_idx)#,len(C)
             #
             category = datasetes[category_idx]
             if os.path.exists(out_put_file + category) == False:

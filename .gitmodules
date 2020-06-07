@@ -1,0 +1,3 @@
+[submodule "SketchX-PRIS-Dataset"]
+	path = SketchX-PRIS-Dataset
+	url = https://github.com/KeLi-SketchX/SketchX-PRIS-Dataset.git

@@ -434,11 +434,12 @@ class PG_cluster_Rnn():
         # Find two clusters with the smallest loss
         np.fill_diagonal(A, - float('Inf'))
         if self.Kc < len(A)/2:
-            K = len(A)/2
+            K = len(A)//2
         elif len(A)>6 and len(A)<15:
             K = 4
         else:
             K = len(A) -1
+        # print("SHAPEEEE", A.shape)
         indexA = A.argsort(axis=1)[:, ::-1][:, 0: K]
         sortedA = np.sort(A, axis=1)[:, ::-1][:, 0: K]
 
@@ -748,16 +749,17 @@ class PG_cluster_Rnn():
             sketch_pre_line_labels = self.get_labels(C)
 
             average_group+=len(C)
-            category_idx = test_idx / 100
+            category_idx = test_idx // 100
             # print (test_idx)#,len(C)
             #
             category = datasetes[category_idx]
             if os.path.exists(out_put_file + category) == False:
                 os.mkdir(out_put_file + category)
-            test_file_name = '/import/vision-datasets/kl303/PycharmProjects/BSR/bench/PG_data/test_file/' + category + '.txt'
+            test_file_name = '/SketchX-PRIS-Dataset/Group_ID/' + category + '.txt'
             test_f = open(test_file_name, 'r')
             lines = test_f.readlines()
-            line = lines[np.mod(test_idx, 100)].strip()
+            # line = lines[np.mod(test_idx, 100)].strip()
+            line = lines[category_idx].strip()
             test_f.close()
          #   pdb.set_trace()
             mat_file_name = out_put_file + category + '/' + line[:-4] + '.mat'

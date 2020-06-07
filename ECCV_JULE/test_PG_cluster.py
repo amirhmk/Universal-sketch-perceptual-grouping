@@ -755,7 +755,7 @@ class PG_cluster_Rnn():
             category = datasetes[category_idx]
             if os.path.exists(out_put_file + category) == False:
                 os.mkdir(out_put_file + category)
-            test_file_name = '/SketchX-PRIS-Dataset/Group_ID/' + category + '.txt'
+            test_file_name = './SketchX-PRIS-Dataset/Group_ID/' + category + '.txt'
             test_f = open(test_file_name, 'r')
             lines = test_f.readlines()
             # line = lines[np.mod(test_idx, 100)].strip()

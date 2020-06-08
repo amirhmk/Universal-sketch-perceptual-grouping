@@ -745,6 +745,7 @@ class PG_cluster_Rnn():
         for test_idx in range(len(use_set.strokes)):
             _, x, labels, str_labels, s,stroke_group_label = use_set.get_batch(test_idx)
             self.gnd = stroke_group_label[0]
+            # print(labels)
             C,C_dict,min_loss = self.recurrent_process(False, x, labels, str_labels, s,step)
             sketch_pre_line_labels = self.get_labels(C)
 
@@ -755,14 +756,16 @@ class PG_cluster_Rnn():
             category = datasetes[category_idx]
             if os.path.exists(out_put_file + category) == False:
                 os.mkdir(out_put_file + category)
-            test_file_name = './SketchX-PRIS-Dataset/Group_ID/' + category + '.txt'
+            test_file_name = './evaluation/PG_data/test_file/' + category + '.txt'
             test_f = open(test_file_name, 'r')
             lines = test_f.readlines()
-            # line = lines[np.mod(test_idx, 100)].strip()
-            line = lines[category_idx].strip()
+            line = lines[np.mod(test_idx, 100)].strip()
+            # print("helllo", np.mod(test_idx, 100))
+            # print("labelsss", sketch_pre_line_labels)
+            # line = lines[category_idx].strip()
             test_f.close()
          #   pdb.set_trace()
-            mat_file_name = out_put_file + category + '/' + line[:-4] + '.mat'
+            mat_file_name = out_put_file + category + '/' + line[:-4]
             pre_label2BSR.draw_sketch_with_strokes(eval_strokes[test_idx], sketch_pre_line_labels, mat_file_name)
             #print str(len(eval_strokes[test_idx]))+' '+str(len(sketch_pre_line_labels))
             # if os.path.exists(out_put_file + category + '/' + line[:-4]) == False:

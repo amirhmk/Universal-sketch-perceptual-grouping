@@ -11,7 +11,7 @@ import numpy as np
 import requests
 import six
 from six.moves import cStringIO as StringIO
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 import model as sketch_rnn_model
 import utils
@@ -43,14 +43,12 @@ tf.app.flags.DEFINE_string(
 PRETRAINED_MODELS_URL = ('http://download.magenta.tensorflow.org/models/'
                          'sketch_rnn.zip')
 
-
 def reset_graph():
   """Closes the current default session and resets the graph."""
   sess = tf.get_default_session()
   if sess:
     sess.close()
   tf.reset_default_graph()
-
 
 def load_env(data_dir, model_dir):
   """Loads environment for inference mode, used in jupyter notebook."""
@@ -77,31 +75,28 @@ def load_model(model_dir):
   return [model_params, eval_model_params, sample_model_params]
 
 
-def download_pretrained_models(
-    models_root_dir='./models',
-    pretrained_models_url=PRETRAINED_MODELS_URL):
-  """Download pretrained models to a temporary directory."""
-  tf.gfile.MakeDirs(models_root_dir)
-  zip_path = os.path.join(
-      models_root_dir, os.path.basename(pretrained_models_url))
-  if os.path.isfile(zip_path):
-    tf.logging.info('%s already exists, using cached copy', zip_path)
-  else:
-    tf.logging.info('Downloading pretrained models from %s...',
-                    pretrained_models_url)
-    urllib.urlretrieve(pretrained_models_url, zip_path)
-    tf.logging.info('Download complete.')
-  tf.logging.info('Unzipping %s...', zip_path)
-  with zipfile.ZipFile(zip_path) as models_zip:
-    models_zip.extractall(models_root_dir)
-  tf.logging.info('Unzipping complete.')
-
+# def download_pretrained_models(
+#     models_root_dir='/tmp/sketch_rnn/models',
+#     pretrained_models_url=PRETRAINED_MODELS_URL):
+#   """Download pretrained models to a temporary directory."""
+#   tf.gfile.MakeDirs(models_root_dir)
+#   zip_path = os.path.join(
+#       models_root_dir, os.path.basename(pretrained_models_url))
+#   if os.path.isfile(zip_path):
+#     tf.logging.info('%s already exists, using cached copy', zip_path)
+#   else:
+#     tf.logging.info('Downloading pretrained models from %s...',
+#                     pretrained_models_url)
+#     urlretrieve(pretrained_models_url, zip_path)
+#     tf.logging.info('Download complete.')
+#   tf.logging.info('Unzipping %s...', zip_path)
+#   with zipfile.ZipFile(zip_path) as models_zip:
+#     models_zip.extractall(models_root_dir)
+#   tf.logging.info('Unzipping complete.')
 
 
 def load_dataset(data_dir, model_params, inference_mode=False):
   # aug_data_dir ='/import/vision-datasets/kl303/PG_data/svg_fine_tuning/Aug_data/'
-
-
   datasets = model_params.data_set
   model_params.data_set = datasets
   train_strokes = None
@@ -209,34 +204,21 @@ def evaluate_model(sess, model, data_set):
   return (total_g_cost,test_ac)
 
 
-def load_checkpoint(checkpoint_path,checkpoint_exclude_scopes):
+def load_checkpoint(sess, checkpoint_path):
+  saver = tf.train.Saver(tf.global_variables())
   ckpt = tf.train.get_checkpoint_state(checkpoint_path)
-  pretrain_model = ckpt.model_checkpoint_path
-  print("load pretrained model from %s" % pretrain_model)
-
-  exclusions = [scope.strip() for scope in checkpoint_exclude_scopes]
-
-  variables_to_restore = []
-
-  for var in tf.trainable_variables():
-    excluded = False
-    for exclusion in exclusions:
-      if var.op.name.startswith(exclusion):
-        excluded = True
-        break
-    if not excluded:
-      print(var.name)
-      variables_to_restore.append(var)
-  return slim.assign_from_checkpoint_fn(pretrain_model, variables_to_restore)
+  tf.logging.info('Loading model %s.', ckpt.model_checkpoint_path)
+  saver.restore(sess, ckpt.model_checkpoint_path)
 
 
-def save_model(sess, model_save_path, global_step,saver):
+def save_model(sess, model_save_path, global_step):
+  saver = tf.train.Saver(tf.global_variables())
   checkpoint_path = os.path.join(model_save_path, 'vector')
   tf.logging.info('saving model %s.', checkpoint_path)
   tf.logging.info('global_step %i.', global_step)
   saver.save(sess, checkpoint_path, global_step=global_step)
 
-def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
+def train(sess, model, eval_model, train_set, valid_set, test_set):
   """Train a sketch-rnn model."""
   # Setup summary writer.
   summary_writer = tf.summary.FileWriter(FLAGS.log_root)
@@ -255,7 +237,7 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
   summary_writer.flush()
 
   # setup eval stats
-  best_valid_cost = 100000  # set a large init value
+  best_valid_cost = 100000000.0  # set a large init value
   valid_cost = 0.0
 
   # main train loop
@@ -348,7 +330,7 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
       if valid_cost < best_valid_cost:
         best_valid_cost = valid_cost
 
-        save_model(sess, FLAGS.log_root, step,saver)
+        save_model(sess, FLAGS.log_root, step)
 
         end = time.time()
         time_taken_save = end - start
@@ -391,7 +373,7 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
         summary_writer.flush()
 
 
-def trainer(model_params,sess):
+def trainer(model_params):
   """Train a sketch-rnn model."""
   np.set_printoptions(precision=8, edgeitems=6, linewidth=200, suppress=True)
 
@@ -407,34 +389,36 @@ def trainer(model_params,sess):
   test_set = datasets[2]
   model_params = datasets[3]
   eval_model_params = datasets[4]
+  reset_graph()
 
   model = sketch_rnn_model.Model(model_params)
   eval_model = sketch_rnn_model.Model(eval_model_params, reuse=True)
   
   sess.run(tf.global_variables_initializer())
-  saver = tf.train.Saver(tf.global_variables())
   if FLAGS.resume_training:
-    init_op = load_checkpoint(FLAGS.log_root,[])
-    init_op(sess)
+    load_checkpoint(sess, FLAGS.log_root)
 
   # Write config file to json file.
   tf.gfile.MakeDirs(FLAGS.log_root)
   with tf.gfile.Open(
       os.path.join(FLAGS.log_root, 'model_config.json'), 'w') as f:
-    json.dump(model_params.values(), f, indent=True)
+    json.dump(list(model_params.values()), f, indent=True)
 
-  train(sess, model, eval_model, train_set,valid_set,test_set,saver)
+  train(sess, model, eval_model, train_set, valid_set, test_set)
 
 
 def main(unused_argv):
   """Load model params, save config file and start trainer."""
-  sess = tf.Session()
-  default_model_params = sketch_rnn_model.get_default_hparams()
-  trainer(default_model_params,sess)
+  model_params = sketch_rnn_model.get_default_hparams()
+  if FLAGS.hparams:
+    model_params.parse(FLAGS.hparams)
+  trainer(model_params)
 
 
 def console_entry_point():
+  tf.disable_v2_behavior()
   tf.app.run(main)
+
 
 
 if __name__ == '__main__':

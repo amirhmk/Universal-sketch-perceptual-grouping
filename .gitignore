@@ -1,0 +1,10 @@
+logfile
+*.mat
+pre_label
+models/events.out.tfevents.*.Amirs-MBP
+evaluation/PG_data/
+**/*.pyc
+model_config.json
+models/vector-5700.data-00000-of-00001
+utils.pyc
+

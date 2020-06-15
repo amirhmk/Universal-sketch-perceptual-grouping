@@ -6,7 +6,6 @@ import urllib
 import zipfile
 import h5py
 # internal imports
-import tensorflow.contrib.slim as slim
 import numpy as np
 import requests
 import six

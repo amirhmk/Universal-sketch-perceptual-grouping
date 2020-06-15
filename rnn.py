@@ -51,7 +51,7 @@ def lstm_ortho_initializer(scale=1.0):
   return _initializer
 
 
-class LSTMCell(tf.nn.rnn_cell.RNNCell):
+class LSTMCell(tf.compat.v1.nn.rnn_cell.RNNCell):
   """Vanilla LSTM cell.
 
   Uses ortho initializer, and also recurrent dropout without memory loss
@@ -81,7 +81,7 @@ class LSTMCell(tf.nn.rnn_cell.RNNCell):
     return h
 
   def __call__(self, x, state, scope=None):
-    with tf.variable_scope(scope or type(self).__name__):
+    with tf.compat.v1.variable_scope(scope or type(self).__name__):
       c, h = tf.split(state, 2, 1)
 
       x_size = x.get_shape().as_list()[1]
@@ -91,13 +91,13 @@ class LSTMCell(tf.nn.rnn_cell.RNNCell):
       h_init = lstm_ortho_initializer(1.0)
 
       # Keep W_xh and W_hh separate here as well to use different init methods.
-      w_xh = tf.get_variable(
+      w_xh = tf.compat.v1.get_variable(
           'W_xh', [x_size, 4 * self.num_units], initializer=w_init)
-      w_hh = tf.get_variable(
+      w_hh = tf.compat.v1.get_variable(
           'W_hh', [self.num_units, 4 * self.num_units], initializer=h_init)
-      bias = tf.get_variable(
+      bias = tf.compat.v1.get_variable(
           'bias', [4 * self.num_units],
-          initializer=tf.constant_initializer(0.0))
+          initializer=tf.compat.v1.constant_initializer(0.0))
 
       concat = tf.concat([x, h], 1)
       w_full = tf.concat([w_xh, w_hh], 0)
@@ -106,7 +106,7 @@ class LSTMCell(tf.nn.rnn_cell.RNNCell):
       i, j, f, o = tf.split(hidden, 4, 1)
 
       if self.use_recurrent_dropout:
-        g = tf.nn.dropout(tf.tanh(j), self.dropout_keep_prob)
+        g = tf.nn.dropout(tf.tanh(j), 1 - (self.dropout_keep_prob))
       else:
         g = tf.tanh(j)
 
@@ -129,22 +129,22 @@ def layer_norm_all(h,
   # Performs layer norm on multiple base at once (ie, i, g, j, o for lstm)
   # Reshapes h in to perform layer norm in parallel
   h_reshape = tf.reshape(h, [batch_size, base, num_units])
-  mean = tf.reduce_mean(h_reshape, [2], keep_dims=True)
-  var = tf.reduce_mean(tf.square(h_reshape - mean), [2], keep_dims=True)
+  mean = tf.reduce_mean(input_tensor=h_reshape, axis=[2], keepdims=True)
+  var = tf.reduce_mean(input_tensor=tf.square(h_reshape - mean), axis=[2], keepdims=True)
   epsilon = tf.constant(epsilon)
-  rstd = tf.rsqrt(var + epsilon)
+  rstd = tf.math.rsqrt(var + epsilon)
   h_reshape = (h_reshape - mean) * rstd
   # reshape back to original
   h = tf.reshape(h_reshape, [batch_size, base * num_units])
-  with tf.variable_scope(scope):
+  with tf.compat.v1.variable_scope(scope):
     if reuse:
-      tf.get_variable_scope().reuse_variables()
-    gamma = tf.get_variable(
+      tf.compat.v1.get_variable_scope().reuse_variables()
+    gamma = tf.compat.v1.get_variable(
         'ln_gamma', [4 * num_units],
-        initializer=tf.constant_initializer(gamma_start))
+        initializer=tf.compat.v1.constant_initializer(gamma_start))
     if use_bias:
-      beta = tf.get_variable(
-          'ln_beta', [4 * num_units], initializer=tf.constant_initializer(0.0))
+      beta = tf.compat.v1.get_variable(
+          'ln_beta', [4 * num_units], initializer=tf.compat.v1.constant_initializer(0.0))
   if use_bias:
     return gamma * h + beta
   return gamma * h
@@ -159,19 +159,19 @@ def layer_norm(x,
                use_bias=True):
   """Calculate layer norm."""
   axes = [1]
-  mean = tf.reduce_mean(x, axes, keep_dims=True)
+  mean = tf.reduce_mean(input_tensor=x, axis=axes, keepdims=True)
   x_shifted = x - mean
-  var = tf.reduce_mean(tf.square(x_shifted), axes, keep_dims=True)
-  inv_std = tf.rsqrt(var + epsilon)
-  with tf.variable_scope(scope):
+  var = tf.reduce_mean(input_tensor=tf.square(x_shifted), axis=axes, keepdims=True)
+  inv_std = tf.math.rsqrt(var + epsilon)
+  with tf.compat.v1.variable_scope(scope):
     if reuse:
-      tf.get_variable_scope().reuse_variables()
-    gamma = tf.get_variable(
+      tf.compat.v1.get_variable_scope().reuse_variables()
+    gamma = tf.compat.v1.get_variable(
         'ln_gamma', [num_units],
-        initializer=tf.constant_initializer(gamma_start))
+        initializer=tf.compat.v1.constant_initializer(gamma_start))
     if use_bias:
-      beta = tf.get_variable(
-          'ln_beta', [num_units], initializer=tf.constant_initializer(0.0))
+      beta = tf.compat.v1.get_variable(
+          'ln_beta', [num_units], initializer=tf.compat.v1.constant_initializer(0.0))
   output = gamma * (x_shifted) * inv_std
   if use_bias:
     output += beta
@@ -180,9 +180,9 @@ def layer_norm(x,
 
 def raw_layer_norm(x, epsilon=1e-3):
   axes = [1]
-  mean = tf.reduce_mean(x, axes, keep_dims=True)
+  mean = tf.reduce_mean(input_tensor=x, axis=axes, keepdims=True)
   std = tf.sqrt(
-      tf.reduce_mean(tf.square(x - mean), axes, keep_dims=True) + epsilon)
+      tf.reduce_mean(input_tensor=tf.square(x - mean), axis=axes, keepdims=True) + epsilon)
   output = (x - mean) / (std)
   return output
 
@@ -198,9 +198,9 @@ def super_linear(x,
                  input_size=None):
   """Performs linear operation. Uses ortho init defined earlier."""
   shape = x.get_shape().as_list()
-  with tf.variable_scope(scope or 'linear'):
+  with tf.compat.v1.variable_scope(scope or 'linear'):
     if reuse:
-      tf.get_variable_scope().reuse_variables()
+      tf.compat.v1.get_variable_scope().reuse_variables()
 
     w_init = None  # uniform
     if input_size is None:
@@ -208,26 +208,26 @@ def super_linear(x,
     else:
       x_size = input_size
     if init_w == 'zeros':
-      w_init = tf.constant_initializer(0.0)
+      w_init = tf.compat.v1.constant_initializer(0.0)
     elif init_w == 'constant':
-      w_init = tf.constant_initializer(weight_start)
+      w_init = tf.compat.v1.constant_initializer(weight_start)
     elif init_w == 'gaussian':
-      w_init = tf.random_normal_initializer(stddev=weight_start)
+      w_init = tf.compat.v1.random_normal_initializer(stddev=weight_start)
     elif init_w == 'ortho':
       w_init = lstm_ortho_initializer(1.0)
 
-    w = tf.get_variable(
+    w = tf.compat.v1.get_variable(
         'super_linear_w', [x_size, output_size], tf.float32, initializer=w_init)
     if use_bias:
-      b = tf.get_variable(
+      b = tf.compat.v1.get_variable(
           'super_linear_b', [output_size],
           tf.float32,
-          initializer=tf.constant_initializer(bias_start))
+          initializer=tf.compat.v1.constant_initializer(bias_start))
       return tf.matmul(x, w) + b
     return tf.matmul(x, w)
 
 
-class LayerNormLSTMCell(tf.nn.rnn_cell.RNNCell):
+class LayerNormLSTMCell(tf.compat.v1.nn.rnn_cell.RNNCell):
   """Layer-Norm, with Ortho Init. and Recurrent Dropout without Memory Loss.
 
   https://arxiv.org/abs/1607.06450 - Layer Norm
@@ -269,7 +269,7 @@ class LayerNormLSTMCell(tf.nn.rnn_cell.RNNCell):
     return h
 
   def __call__(self, x, state, timestep=0, scope=None):
-    with tf.variable_scope(scope or type(self).__name__):
+    with tf.compat.v1.variable_scope(scope or type(self).__name__):
       h, c = tf.split(state, 2, 1)
 
       h_size = self.num_units
@@ -280,9 +280,9 @@ class LayerNormLSTMCell(tf.nn.rnn_cell.RNNCell):
 
       h_init = lstm_ortho_initializer(1.0)
 
-      w_xh = tf.get_variable(
+      w_xh = tf.compat.v1.get_variable(
           'W_xh', [x_size, 4 * self.num_units], initializer=w_init)
-      w_hh = tf.get_variable(
+      w_hh = tf.compat.v1.get_variable(
           'W_hh', [self.num_units, 4 * self.num_units], initializer=h_init)
 
       concat = tf.concat([x, h], 1)  # concat for speed.
@@ -294,7 +294,7 @@ class LayerNormLSTMCell(tf.nn.rnn_cell.RNNCell):
       i, j, f, o = tf.split(concat, 4, 1)
 
       if self.use_recurrent_dropout:
-        g = tf.nn.dropout(tf.tanh(j), self.dropout_keep_prob)
+        g = tf.nn.dropout(tf.tanh(j), 1 - (self.dropout_keep_prob))
       else:
         g = tf.tanh(j)
 
@@ -304,7 +304,7 @@ class LayerNormLSTMCell(tf.nn.rnn_cell.RNNCell):
     return new_h, tf.concat([new_h, new_c], 1)
 
 
-class HyperLSTMCell(tf.nn.rnn_cell.RNNCell):
+class HyperLSTMCell(tf.compat.v1.nn.rnn_cell.RNNCell):
   """HyperLSTM with Ortho Init, Layer Norm, Recurrent Dropout, no Memory Loss.
 
   https://arxiv.org/abs/1609.09106
@@ -379,7 +379,7 @@ class HyperLSTMCell(tf.nn.rnn_cell.RNNCell):
     embedding_size = self.hyper_embedding_size
     # recurrent batch norm init trick (https://arxiv.org/abs/1603.09025).
     init_gamma = 0.10  # cooijmans' da man.
-    with tf.variable_scope(scope):
+    with tf.compat.v1.variable_scope(scope):
       zw = super_linear(
           self.hyper_output,
           embedding_size,
@@ -416,7 +416,7 @@ class HyperLSTMCell(tf.nn.rnn_cell.RNNCell):
     return result
 
   def __call__(self, x, state, timestep=0, scope=None):
-    with tf.variable_scope(scope or type(self).__name__):
+    with tf.compat.v1.variable_scope(scope or type(self).__name__):
       total_h, total_c = tf.split(state, 2, 1)
       h = total_h[:, 0:self.num_units]
       c = total_c[:, 0:self.num_units]
@@ -431,13 +431,13 @@ class HyperLSTMCell(tf.nn.rnn_cell.RNNCell):
 
       h_init = lstm_ortho_initializer(1.0)
 
-      w_xh = tf.get_variable(
+      w_xh = tf.compat.v1.get_variable(
           'W_xh', [x_size, 4 * self.num_units], initializer=w_init)
-      w_hh = tf.get_variable(
+      w_hh = tf.compat.v1.get_variable(
           'W_hh', [self.num_units, 4 * self.num_units], initializer=h_init)
-      bias = tf.get_variable(
+      bias = tf.compat.v1.get_variable(
           'bias', [4 * self.num_units],
-          initializer=tf.constant_initializer(0.0))
+          initializer=tf.compat.v1.constant_initializer(0.0))
 
       # concatenate the input and hidden states for hyperlstm input
       hyper_input = tf.concat([x, h], 1)
@@ -478,7 +478,7 @@ class HyperLSTMCell(tf.nn.rnn_cell.RNNCell):
         i, j, f, o = tf.split(concat, 4, 1)
 
       if self.use_recurrent_dropout:
-        g = tf.nn.dropout(tf.tanh(j), self.dropout_keep_prob)
+        g = tf.nn.dropout(tf.tanh(j), 1 - (self.dropout_keep_prob))
       else:
         g = tf.tanh(j)
 

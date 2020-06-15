@@ -15,7 +15,7 @@ import tensorflow.compat.v1 as tf
 import model as sketch_rnn_model
 import utils
 import pdb
-tf.logging.set_verbosity(tf.logging.INFO)
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -44,15 +44,15 @@ PRETRAINED_MODELS_URL = ('http://download.magenta.tensorflow.org/models/'
 
 def reset_graph():
   """Closes the current default session and resets the graph."""
-  sess = tf.get_default_session()
+  sess = tf.compat.v1.get_default_session()
   if sess:
     sess.close()
-  tf.reset_default_graph()
+  tf.compat.v1.reset_default_graph()
 
 def load_env(data_dir, model_dir):
   """Loads environment for inference mode, used in jupyter notebook."""
   model_params = sketch_rnn_model.get_default_hparams()
-  with tf.gfile.Open(os.path.join(model_dir, 'model_config.json'), 'r') as f:
+  with tf.io.gfile.GFile(os.path.join(model_dir, 'model_config.json'), 'r') as f:
     model_params.parse_json(f.read())
   return load_dataset(data_dir, model_params, inference_mode=True)
 
@@ -60,7 +60,7 @@ def load_env(data_dir, model_dir):
 def load_model(model_dir):
   """Loads model for inference mode, used in jupyter notebook."""
   model_params = sketch_rnn_model.get_default_hparams()
-  with tf.gfile.Open(os.path.join(model_dir, 'model_config.json'), 'r') as f:
+  with tf.io.gfile.GFile(os.path.join(model_dir, 'model_config.json'), 'r') as f:
     model_params.parse_json(f.read())
 
   model_params.batch_size = 1  # only sample one at a time
@@ -135,7 +135,7 @@ def load_dataset(data_dir, model_params, inference_mode=False):
   # overwrite the hps with this calculation.
   model_params.max_seq_len = max_seq_len
 
-  tf.logging.info('model_params.max_seq_len %i.', model_params.max_seq_len)
+  tf.compat.v1.logging.info('model_params.max_seq_len %i.', model_params.max_seq_len)
 
   eval_model_params = sketch_rnn_model.copy_hparams(model_params)
 
@@ -179,7 +179,7 @@ def load_dataset(data_dir, model_params, inference_mode=False):
       augment_stroke_prob=0.0)
   test_set.normalize(normalizing_scale_factor)
 
-  tf.logging.info('normalizing_scale_factor %4.4f.', normalizing_scale_factor)
+  tf.compat.v1.logging.info('normalizing_scale_factor %4.4f.', normalizing_scale_factor)
 
 
   result = [train_set,valid_set,test_set, model_params, eval_model_params,sample_model_params]
@@ -204,32 +204,32 @@ def evaluate_model(sess, model, data_set):
 
 
 def load_checkpoint(sess, checkpoint_path):
-  saver = tf.train.Saver(tf.global_variables())
+  saver = tf.compat.v1.train.Saver(tf.compat.v1.global_variables())
   ckpt = tf.train.get_checkpoint_state(checkpoint_path)
-  tf.logging.info('Loading model %s.', ckpt.model_checkpoint_path)
+  tf.compat.v1.logging.info('Loading model %s.', ckpt.model_checkpoint_path)
   saver.restore(sess, ckpt.model_checkpoint_path)
 
 
 def save_model(sess, model_save_path, global_step):
-  saver = tf.train.Saver(tf.global_variables())
+  saver = tf.compat.v1.train.Saver(tf.compat.v1.global_variables())
   checkpoint_path = os.path.join(model_save_path, 'vector')
-  tf.logging.info('saving model %s.', checkpoint_path)
-  tf.logging.info('global_step %i.', global_step)
+  tf.compat.v1.logging.info('saving model %s.', checkpoint_path)
+  tf.compat.v1.logging.info('global_step %i.', global_step)
   saver.save(sess, checkpoint_path, global_step=global_step)
 
 def train(sess, model, eval_model, train_set, valid_set, test_set):
   """Train a sketch-rnn model."""
   # Setup summary writer.
-  summary_writer = tf.summary.FileWriter(FLAGS.log_root)
+  summary_writer = tf.compat.v1.summary.FileWriter(FLAGS.log_root)
   # Calculate trainable params.
-  t_vars = tf.trainable_variables()
+  t_vars = tf.compat.v1.trainable_variables()
   count_t_vars = 0
   for var in t_vars:
     num_param = np.prod(var.get_shape().as_list())
     count_t_vars += num_param
-    tf.logging.info('%s %s %i', var.name, str(var.get_shape()), num_param)
-  tf.logging.info('Total trainable variables %i.', count_t_vars)
-  model_summ = tf.summary.Summary()
+    tf.compat.v1.logging.info('%s %s %i', var.name, str(var.get_shape()), num_param)
+  tf.compat.v1.logging.info('Total trainable variables %i.', count_t_vars)
+  model_summ = tf.compat.v1.summary.Summary()
   model_summ.value.add(
       tag='Num_Trainable_Params', simple_value=float(count_t_vars))
   summary_writer.add_summary(model_summ, 0)
@@ -274,18 +274,18 @@ def train(sess, model, eval_model, train_set, valid_set, test_set):
       time_taken = end - start
 
 
-      g_summ = tf.summary.Summary()
+      g_summ = tf.compat.v1.summary.Summary()
       g_summ.value.add(tag='Train_group_Cost', simple_value=float(g_cost))
-      lr_summ = tf.summary.Summary()
+      lr_summ = tf.compat.v1.summary.Summary()
       lr_summ.value.add(
           tag='Learning_Rate', simple_value=float(curr_learning_rate))
-      kl_weight_summ = tf.summary.Summary()
+      kl_weight_summ = tf.compat.v1.summary.Summary()
       kl_weight_summ.value.add(
           tag='KL_Weight', simple_value=float(curr_kl_weight))
-      time_summ = tf.summary.Summary()
+      time_summ = tf.compat.v1.summary.Summary()
       time_summ.value.add(
           tag='Time_Taken_Train', simple_value=float(time_taken))
-      accuracy_summ = tf.summary.Summary()
+      accuracy_summ = tf.compat.v1.summary.Summary()
       accuracy_summ.value.add(
       tag='train_accuracy', simple_value=float(train_accuracy))
       output_format = ('step: %d, lr: %.6f, cost: %.4f,'
@@ -293,7 +293,7 @@ def train(sess, model, eval_model, train_set, valid_set, test_set):
       output_values = (step, curr_learning_rate,  g_cost, time_taken,train_accuracy)
       output_log = output_format % output_values
 
-      tf.logging.info(output_log)
+      tf.compat.v1.logging.info(output_log)
 
       summary_writer.add_summary(g_summ, train_step)
       summary_writer.add_summary(lr_summ, train_step)
@@ -309,10 +309,10 @@ def train(sess, model, eval_model, train_set, valid_set, test_set):
       time_taken_valid = end - start
       start = time.time()
 
-      valid_g_summ = tf.summary.Summary()
+      valid_g_summ = tf.compat.v1.summary.Summary()
       valid_g_summ.value.add(
           tag='Valid_group_Cost', simple_value=float(valid_g_cost))
-      valid_time_summ = tf.summary.Summary()
+      valid_time_summ = tf.compat.v1.summary.Summary()
       valid_time_summ.value.add(
           tag='Time_Taken_Valid', simple_value=float(time_taken_valid))
 
@@ -320,7 +320,7 @@ def train(sess, model, eval_model, train_set, valid_set, test_set):
       output_values = (min(best_valid_cost, valid_g_cost), valid_g_cost, time_taken_valid,valid_ac)
       output_log = output_format % output_values
 
-      tf.logging.info(output_log)
+      tf.compat.v1.logging.info(output_log)
 
       summary_writer.add_summary(valid_g_summ, train_step)
       summary_writer.add_summary(valid_time_summ, train_step)
@@ -335,9 +335,9 @@ def train(sess, model, eval_model, train_set, valid_set, test_set):
         time_taken_save = end - start
         start = time.time()
 
-        tf.logging.info('time_taken_save %4.4f.', time_taken_save)
+        tf.compat.v1.logging.info('time_taken_save %4.4f.', time_taken_save)
 
-        best_valid_cost_summ = tf.summary.Summary()
+        best_valid_cost_summ = tf.compat.v1.summary.Summary()
         best_valid_cost_summ.value.add(
             tag='Best_Valid_Cost', simple_value=float(best_valid_cost))
 
@@ -350,13 +350,13 @@ def train(sess, model, eval_model, train_set, valid_set, test_set):
         time_taken_eval = end - start
         start = time.time()
 
-        eval_g_summ = tf.summary.Summary()
+        eval_g_summ = tf.compat.v1.summary.Summary()
         eval_g_summ.value.add(
             tag='Eval_group_Cost', simple_value=float(eval_g_cost))
-        eval_accuracy_summ = tf.summary.Summary()
+        eval_accuracy_summ = tf.compat.v1.summary.Summary()
         eval_accuracy_summ.value.add(
           tag='eval_accuracy', simple_value=float(eval_ac))
-        eval_time_summ = tf.summary.Summary()
+        eval_time_summ = tf.compat.v1.summary.Summary()
         eval_time_summ.value.add(
             tag='Time_Taken_Eval', simple_value=float(time_taken_eval))
 
@@ -365,7 +365,7 @@ def train(sess, model, eval_model, train_set, valid_set, test_set):
         output_values = (eval_g_cost, time_taken_eval,eval_ac)
         output_log = output_format % output_values
 
-        tf.logging.info(output_log)
+        tf.compat.v1.logging.info(output_log)
 
         summary_writer.add_summary(eval_g_summ, train_step)
         summary_writer.add_summary(eval_time_summ, train_step)
@@ -376,11 +376,11 @@ def trainer(model_params):
   """Train a sketch-rnn model."""
   np.set_printoptions(precision=8, edgeitems=6, linewidth=200, suppress=True)
 
-  tf.logging.info('PG-rnn')
-  tf.logging.info('Hyperparams:')
+  tf.compat.v1.logging.info('PG-rnn')
+  tf.compat.v1.logging.info('Hyperparams:')
   for key, val in six.iteritems(model_params.values()):
-    tf.logging.info('%s = %s', key, str(val))
-  tf.logging.info('Loading data files.')
+    tf.compat.v1.logging.info('%s = %s', key, str(val))
+  tf.compat.v1.logging.info('Loading data files.')
   datasets = load_dataset(FLAGS.data_dir, model_params)
 
   train_set = datasets[0]
@@ -393,13 +393,13 @@ def trainer(model_params):
   model = sketch_rnn_model.Model(model_params)
   eval_model = sketch_rnn_model.Model(eval_model_params, reuse=True)
   
-  sess.run(tf.global_variables_initializer())
+  sess.run(tf.compat.v1.global_variables_initializer())
   if FLAGS.resume_training:
     load_checkpoint(sess, FLAGS.log_root)
 
   # Write config file to json file.
-  tf.gfile.MakeDirs(FLAGS.log_root)
-  with tf.gfile.Open(
+  tf.io.gfile.makedirs(FLAGS.log_root)
+  with tf.io.gfile.GFile(
       os.path.join(FLAGS.log_root, 'model_config.json'), 'w') as f:
     json.dump(list(model_params.values()), f, indent=True)
 
@@ -415,8 +415,8 @@ def main(unused_argv):
 
 
 def console_entry_point():
-  tf.disable_v2_behavior()
-  tf.app.run(main)
+  tf.compat.v1.disable_v2_behavior()
+  tf.compat.v1.app.run(main)
 
 
 

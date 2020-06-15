@@ -23,7 +23,7 @@ FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string(
     'data_dir',
-    '/import/vision-datasets001/kl303/PG_data/PG_ndjson/fine_tuning1/',
+    'SketchX-PRIS-Dataset/Perceptual_Grouping/',
 
     'The directory in which to find the dataset specified in model hparams. '
     'If data_dir starts with "http://" or "https://", the file will be fetched '

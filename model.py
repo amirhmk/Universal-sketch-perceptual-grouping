@@ -31,13 +31,13 @@ def copy_hparams(hparams):
 def get_default_hparams():
   """Return default HParams for sketch-rnn."""
   hparams = tf.contrib.training.HParams(
-      # all_data_set = ['airplane','alarm-clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
-      #           'campfire','candle','coffee-cup','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator','angel','bulldozer','drill','flower','house'],
+      # all_data_set = ['airplane','alarm_clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
+      #           'campfire','candle','coffee_up','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator','angel','bulldozer','drill','flower','house'],
       data_set=['airplane','alarm_clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
-               'campfire','candle','coffee-cup','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator'], # Our dataset.
+               'campfire','candle','coffee_cup','crab','duck','face','ice_cream','pig','pineapple','suitcase','calculator'], # Our dataset.
       #teat_data_set = ['airplane','alarm-clock','ambulance','ant','apple'], # 1
       #teat_data_set = ['backpack','basket','butterfly','cactus','campfire'], #2
-      # teat_data_set = ['candle','coffee-cup','crab','duck','face'], #3
+      # teat_data_set = ['candle','coffee_cup','crab','duck','face'], #3
       # teat_data_set = ['ice-cream','pig','pineapple','suitcase','calculator'], #4
 
       # teat_data_set=['angel','bulldozer','drill','flower','house'],

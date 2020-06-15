@@ -19,16 +19,16 @@ from magenta.contrib import training as contrib_training
 from magenta.models.sketch_rnn import rnn
 import numpy as np
 import tensorflow.compat.v1 as tf
-
+tf.disable_v2_behavior()
 
 def copy_hparams(hparams):
   """Return a copy of an HParams instance."""
-  return tf.contrib.training.HParams(**hparams.values())
+  return contrib_training.HParams(**hparams.values())
 
 
 def get_default_hparams():
   """Return default HParams for sketch-rnn."""
-  hparams = tf.contrib.training.HParams(
+  hparams = contrib_training.HParams(
       # all_data_set = ['airplane','alarm_clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
       #           'campfire','candle','coffee_up','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator','angel','bulldozer','drill','flower','house'],
       data_set=['airplane','alarm_clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
@@ -210,7 +210,7 @@ class Model(object):
     self.output_x = self.input_data[:, 1:self.hps.max_seq_len + 1, :]
     # vectors of strokes to be fed to decoder (same as above, but lagged behind
     # one step to include initial dummy value of (0, 0, 1, 0, 0))
-    self.input_x = self.input_data[:, :self.hps.max_seq_len, :]
+    self.input_x = self.input_data[:, 1:self.hps.max_seq_len+1, :]
 
     # either do vae-bit and get z, or do unconditional, decoder-only
     if hps.conditional:  # vae mode:

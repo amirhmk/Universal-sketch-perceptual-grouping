@@ -32,7 +32,7 @@ def get_default_hparams():
   """Return default HParams for sketch-rnn."""
   hparams = tf.contrib.training.HParams(
       all_data_set = ['airplane','alarm-clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
-                'campfire','candle','coffee-cup','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator','angel','bulldozer','drill','flower','house'],
+                'campfire','candle','coffee_cup','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator','angel','bulldozer','drill','flower','house'],
       #data_set0=['airplane','alarm_clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
       #          'campfire','candle','coffee-cup','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator'], # Our dataset.
       #test_data_set = ['airplane','alarm-clock','ambulance','ant','apple'], # 1

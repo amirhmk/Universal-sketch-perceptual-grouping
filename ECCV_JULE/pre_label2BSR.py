@@ -43,10 +43,9 @@ def draw_sketch_with_strokes(data,stroke_group,evaluate_file_path):
     abspoints=data2abspoints(data)
     unique_stroke_group = np.unique(stroke_group)
     bsd_data = np.zeros((256,256),dtype=np.uint8)
-    image_data = np.zeros((256,256),dtype=np.uint8)+255
+    # image_data = np.zeros((256,256),dtype=np.uint8)+255
 
     for group_idx in unique_stroke_group:
-        group_data = np.zeros((256,256),dtype=np.uint8)+255
         stroke_svg_name = str(group_idx)+'.svg'
         stroke_png_name = str(group_idx)+'.png'
         dwg = svgwrite.Drawing(stroke_svg_name, size=dims)
@@ -61,14 +60,11 @@ def draw_sketch_with_strokes(data,stroke_group,evaluate_file_path):
             dwg.add(dwg.line((begin_point[0], begin_point[1]), (end_point[0], end_point[1]),stroke=svgwrite.rgb(0, 0, 0, '%')))
         dwg.save()
         svg2png(url=stroke_svg_name,write_to=stroke_png_name)
-        # print(stroke_png_name, stroke_png_name)
         os.remove(stroke_svg_name)
         stroke_data = cv2.imread(stroke_png_name,0)
         os.remove(stroke_png_name)
         # fg_idx = np.where(stroke_data<25)[0]
         bsd_data[stroke_data<245] = group_idx+1
-        image_data[stroke_data<245] = 0
-        group_data[stroke_data<245] = 0
-        cv2.imwrite(evaluate_file_path + "_" + str(group_idx) + ".png",group_data)
-    cv2.imwrite(evaluate_file_path + ".png",image_data)
-    scio.savemat(evaluate_file_path + ".mat",{'label_matrix':bsd_data})
+        # image_data[stroke_data<245] = 0
+    # cv2.imwrite(img_file_name,image_data)
+    scio.savemat(evaluate_file_path,{'label_matrix':bsd_data})

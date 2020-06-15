@@ -15,20 +15,22 @@
 
 import random
 
-from magenta.contrib import training as contrib_training
-from magenta.models.sketch_rnn import rnn
+# internal imports
+
 import numpy as np
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
+
+import rnn
+
 
 def copy_hparams(hparams):
   """Return a copy of an HParams instance."""
-  return contrib_training.HParams(**hparams.values())
+  return tf.contrib.training.HParams(**hparams.values())
 
 
 def get_default_hparams():
   """Return default HParams for sketch-rnn."""
-  hparams = contrib_training.HParams(
+  hparams = tf.contrib.training.HParams(
       # all_data_set = ['airplane','alarm_clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
       #           'campfire','candle','coffee_up','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator','angel','bulldozer','drill','flower','house'],
       data_set=['airplane','alarm_clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
@@ -75,25 +77,23 @@ class Model(object):
   """Define a SketchRNN model."""
 
   def __init__(self, hps, gpu_mode=True, reuse=False):
-    """Initializer for the SketchRNN model.
-    Args:
-       hps: a HParams object containing model hyperparameters
-       gpu_mode: a boolean that when True, uses GPU mode.
-       reuse: a boolean that when true, attemps to reuse variables.
-    """
+
     self.hps = hps
-    with tf.compat.v1.variable_scope('vector_rnn', reuse=reuse):
+    with tf.variable_scope('vector_rnn', reuse=reuse):
       if not gpu_mode:
         with tf.device('/cpu:0'):
-          tf.compat.v1.logging.info('Model using cpu.')
+          tf.logging.info('Model using cpu.')
           self.build_model(hps)
       else:
-        tf.compat.v1.logging.info('Model using gpu.')
+        tf.logging.info('Model using gpu.')
         self.build_model(hps)
 
   def encoder(self, batch, sequence_lengths):
     """Define the bi-directional encoder module of sketch-rnn."""
-    unused_outputs, last_states = tf.compat.v1.nn.bidirectional_dynamic_rnn(
+
+
+
+    unused_outputs, last_states = tf.nn.bidirectional_dynamic_rnn(
         self.enc_cell_fw,
         self.enc_cell_bw,
         batch,
@@ -176,40 +176,38 @@ class Model(object):
             dropout_keep_prob=self.hps.recurrent_dropout_prob)
 
     # dropout:
-    tf.compat.v1.logging.info('Input dropout mode = %s.', use_input_dropout)
-    tf.compat.v1.logging.info('Output dropout mode = %s.', use_output_dropout)
-    tf.compat.v1.logging.info('Recurrent dropout mode = %s.', use_recurrent_dropout)
+    tf.logging.info('Input dropout mode = %s.', use_input_dropout)
+    tf.logging.info('Output dropout mode = %s.', use_output_dropout)
+    tf.logging.info('Recurrent dropout mode = %s.', use_recurrent_dropout)
     if use_input_dropout:
-      tf.compat.v1.logging.info('Dropout to input w/ keep_prob = %4.4f.',
+      tf.logging.info('Dropout to input w/ keep_prob = %4.4f.',
                       self.hps.input_dropout_prob)
-      cell = tf.compat.v1.nn.rnn_cell.DropoutWrapper(
+      cell = tf.contrib.rnn.DropoutWrapper(
           cell, input_keep_prob=self.hps.input_dropout_prob)
     if use_output_dropout:
-      tf.compat.v1.logging.info('Dropout to output w/ keep_prob = %4.4f.',
+      tf.logging.info('Dropout to output w/ keep_prob = %4.4f.',
                       self.hps.output_dropout_prob)
-      cell = tf.compat.v1.nn.rnn_cell.DropoutWrapper(
+      cell = tf.contrib.rnn.DropoutWrapper(
           cell, output_keep_prob=self.hps.output_dropout_prob)
     self.cell = cell
 
-    self.sequence_lengths = tf.compat.v1.placeholder(
+    self.sequence_lengths = tf.placeholder(
         dtype=tf.int32, shape=[self.hps.batch_size])
-    self.input_data = tf.compat.v1.placeholder(
+    self.input_data = tf.placeholder(
         dtype=tf.float32,
         shape=[self.hps.batch_size, self.hps.max_seq_len + 1, 5])
-    self.labels = tf.compat.v1.placeholder(
+    self.labels = tf.placeholder(
         dtype=tf.int32,
         shape=[self.hps.batch_size,self.hps.max_seq_len, self.hps.max_seq_len])
-    self.str_labels = tf.compat.v1.placeholder(
+    self.str_labels = tf.placeholder(
         dtype=tf.int32,
         shape=[self.hps.batch_size,self.hps.max_seq_len,self.hps.max_seq_len])
-    self.triplets = tf.compat.v1.placeholder(
+    self.triplets = tf.placeholder(
         dtype=tf.int32,
         shape=[self.hps.batch_size,3,3000]
     )
     # The target/expected vectors of strokes
     self.output_x = self.input_data[:, 1:self.hps.max_seq_len + 1, :]
-    # vectors of strokes to be fed to decoder (same as above, but lagged behind
-    # one step to include initial dummy value of (0, 0, 1, 0, 0))
     self.input_x = self.input_data[:, 1:self.hps.max_seq_len+1, :]
 
     # either do vae-bit and get z, or do unconditional, decoder-only
@@ -217,14 +215,17 @@ class Model(object):
       self.mean, self.presig = self.encoder(self.output_x,
                                             self.sequence_lengths)
       self.sigma = tf.exp(self.presig / 2.0)  # sigma > 0. div 2.0 -> sqrt.
-      eps = tf.random.normal(
+      
+      eps = tf.random_normal(
           (self.hps.batch_size, self.hps.z_size), 0.0, 1.0, dtype=tf.float32)
+
       if hps.is_training:
         self.batch_z = self.mean + tf.multiply(self.sigma, eps)
       else:
-        self.batch_z = self.mean + self.sigma      # KL cost
+        self.batch_z = self.mean + self.sigma
+      # KL cost
       self.kl_cost = -0.5 * tf.reduce_mean(
-          input_tensor=(1 + self.presig - tf.square(self.mean) - tf.exp(self.presig)))
+          (1 + self.presig - tf.square(self.mean) - tf.exp(self.presig)))
       self.kl_cost = tf.maximum(self.kl_cost, self.hps.kl_tolerance)
       pre_tile_y = tf.reshape(self.batch_z,
                               [self.hps.batch_size, 1, self.hps.z_size])
@@ -247,24 +248,20 @@ class Model(object):
 
     self.num_mixture = hps.num_mixture
 
-    # TODO(deck): Better understand this comment.
-    # Number of outputs is 3 (one logit per pen state) plus 6 per mixture
-    # component: mean_x, stdev_x, mean_y, stdev_y, correlation_xy, and the
-    # mixture weight/probability (Pi_k)
     n_out = (3 + self.num_mixture * 6)
     feat_out_size = 128
 
 
-    with tf.compat.v1.variable_scope('Feat'):
-      feat_w = tf.compat.v1.get_variable('feat_w', [self.hps.dec_rnn_size, feat_out_size])
-      feat_b = tf.compat.v1.get_variable('feat_b', [feat_out_size])
+    with tf.variable_scope('Feat'):
+      feat_w = tf.get_variable('feat_w', [self.hps.dec_rnn_size, feat_out_size])
+      feat_b = tf.get_variable('feat_b', [feat_out_size])
 
-    with tf.compat.v1.variable_scope('RNN'):
-      output_w = tf.compat.v1.get_variable('output_w', [self.hps.dec_rnn_size, n_out])
-      output_b = tf.compat.v1.get_variable('output_b', [n_out])
+    with tf.variable_scope('RNN'):
+      output_w = tf.get_variable('output_w', [self.hps.dec_rnn_size, n_out])
+      output_b = tf.get_variable('output_b', [n_out])
 
     # decoder module of sketch-rnn is below
-    output, last_state = tf.compat.v1.nn.dynamic_rnn(
+    output, last_state = tf.nn.dynamic_rnn(
         cell,
         actual_input_x,
         sequence_length=self.sequence_lengths,
@@ -274,113 +271,78 @@ class Model(object):
         dtype=tf.float32,
         scope='RNN')
 
-    output = tf.reshape(output, [-1, hps.dec_rnn_size])
-    output = tf.compat.v1.nn.xw_plus_b(output, output_w, output_b)
-    feat_out = tf.compat.v1.nn.xw_plus_b(output, feat_w, feat_b)
+    output_reshape = tf.reshape(output, [-1, hps.dec_rnn_size])
+
+    output = tf.nn.xw_plus_b(output_reshape, output_w, output_b)
+    feat_out = tf.nn.xw_plus_b(output_reshape, feat_w, feat_b)
     self.final_state = last_state
 
     # NB: the below are inner functions, not methods of Model
     def tf_2d_normal(x1, x2, mu1, mu2, s1, s2, rho):
-      """Returns result of eq # 24 of http://arxiv.org/abs/1308.0850."""
-      norm1 = tf.subtract(x1, mu1)
-      norm2 = tf.subtract(x2, mu2)
-      s1s2 = tf.multiply(s1, s2)
-      # eq 25
-      z = (tf.square(tf.compat.v1.div(norm1, s1)) + tf.square(tf.compat.v1.div(norm2, s2)) -
-           2 * tf.compat.v1.div(tf.multiply(rho, tf.multiply(norm1, norm2)), s1s2))
-      neg_rho = 1 - tf.square(rho)
-      result = tf.exp(tf.compat.v1.div(-z, 2 * neg_rho))
-      denom = 2 * np.pi * tf.multiply(s1s2, tf.sqrt(neg_rho))
-      result = tf.compat.v1.div(result, denom)
-      return result
+        """Returns result of eq # 24 of http://arxiv.org/abs/1308.0850."""
+        norm1 = tf.subtract(x1, mu1)
+        norm2 = tf.subtract(x2, mu2)
+        s1s2 = tf.multiply(s1, s2)
+        # eq 25
+        z = (tf.square(tf.div(norm1, s1)) + tf.square(tf.div(norm2, s2)) -
+             2 * tf.div(tf.multiply(rho, tf.multiply(norm1, norm2)), s1s2))
+        neg_rho = 1 - tf.square(rho)
+        result = tf.exp(tf.div(-z, 2 * neg_rho))
+        denom = 2 * np.pi * tf.multiply(s1s2, tf.sqrt(neg_rho))
+        result = tf.div(result, denom)
+        return result
 
     def get_lossfunc(z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr,
                      z_pen_logits, x1_data, x2_data, pen_data):
-      """Returns a loss fn based on eq #26 of http://arxiv.org/abs/1308.0850."""
-      # This represents the L_R only (i.e. does not include the KL loss term).
+        """Returns a loss fn based on eq #26 of http://arxiv.org/abs/1308.0850."""
+        # This represents the L_R only (i.e. does not include the KL loss term).
 
-      result0 = tf_2d_normal(x1_data, x2_data, z_mu1, z_mu2, z_sigma1, z_sigma2,
-                             z_corr)
-      epsilon = 1e-6
-      # result1 is the loss wrt pen offset (L_s in equation 9 of
-      # https://arxiv.org/pdf/1704.03477.pdf)
-      result1 = tf.multiply(result0, z_pi)
-      result1 = tf.reduce_sum(input_tensor=result1, axis=1, keepdims=True)
-      result1 = -tf.math.log(result1 + epsilon)  # avoid log(0)
+        result0 = tf_2d_normal(x1_data, x2_data, z_mu1, z_mu2, z_sigma1, z_sigma2,
+                               z_corr)
+        epsilon = 1e-6
+        # result1 is the loss wrt pen offset (L_s in equation 9 of
+        # https://arxiv.org/pdf/1704.03477.pdf)
+        result1 = tf.multiply(result0, z_pi)
+        result1 = tf.reduce_sum(result1, 1, keep_dims=True)
+        result1 = -tf.log(result1 + epsilon)  # avoid log(0)
 
-      fs = 1.0 - pen_data[:, 2]  # use training data for this
-      fs = tf.reshape(fs, [-1, 1])
-      # Zero out loss terms beyond N_s, the last actual stroke
-      result1 = tf.multiply(result1, fs)
+        fs = 1.0 - pen_data[:, 2]  # use training data for this
+        fs = tf.reshape(fs, [-1, 1])
+        # Zero out loss terms beyond N_s, the last actual stroke
+        result1 = tf.multiply(result1, fs)
 
-      # result2: loss wrt pen state, (L_p in equation 9)
-      result2 = tf.nn.softmax_cross_entropy_with_logits(
-          labels=tf.stop_gradient(pen_data), logits=z_pen_logits)
-      result2 = tf.reshape(result2, [-1, 1])
-      if not self.hps.is_training:  # eval mode, mask eos columns
-        result2 = tf.multiply(result2, fs)
+        # result2: loss wrt pen state, (L_p in equation 9)
+        result2 = tf.nn.softmax_cross_entropy_with_logits(
+            labels=pen_data, logits=z_pen_logits)
+        result2 = tf.reshape(result2, [-1, 1])
+        if not self.hps.is_training:  # eval mode, mask eos columns
+            result2 = tf.multiply(result2, fs)
 
-      result = result1 + result2
-      return result
+        result = result1 + result2
+        return result
 
     # below is where we need to do MDN (Mixture Density Network) splitting of
     # distribution params
     def get_mixture_coef(output):
-      """Returns the tf slices containing mdn dist params."""
-      # This uses eqns 18 -> 23 of http://arxiv.org/abs/1308.0850.
-      z = output
-      z_pen_logits = z[:, 0:3]  # pen states
-      z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr = tf.split(z[:, 3:], 6, 1)
+        """Returns the tf slices containing mdn dist params."""
+        # This uses eqns 18 -> 23 of http://arxiv.org/abs/1308.0850.
+        z = output
+        z_pen_logits = z[:, 0:3]  # pen states
+        z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr = tf.split(z[:, 3:], 6, 1)
 
-      # process output z's into MDN parameters
+        # process output z's into MDN paramters
 
-      # softmax all the pi's and pen states:
-      z_pi = tf.nn.softmax(z_pi)
-      z_pen = tf.nn.softmax(z_pen_logits)
+        # softmax all the pi's and pen states:
+        z_pi = tf.nn.softmax(z_pi)
+        z_pen = tf.nn.softmax(z_pen_logits)
 
-      # exponentiate the sigmas and also make corr between -1 and 1.
-      z_sigma1 = tf.exp(z_sigma1)
-      z_sigma2 = tf.exp(z_sigma2)
-      z_corr = tf.tanh(z_corr)
+        # exponentiate the sigmas and also make corr between -1 and 1.
+        z_sigma1 = tf.exp(z_sigma1)
+        z_sigma2 = tf.exp(z_sigma2)
+        z_corr = tf.tanh(z_corr)
 
-      r = [z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr, z_pen, z_pen_logits]
-      return r
-
-    # out = get_mixture_coef(output)
-    # [o_pi, o_mu1, o_mu2, o_sigma1, o_sigma2, o_corr, o_pen, o_pen_logits] = out
-
-    # self.pi = o_pi
-    # self.mu1 = o_mu1
-    # self.mu2 = o_mu2
-    # self.sigma1 = o_sigma1
-    # self.sigma2 = o_sigma2
-    # self.corr = o_corr
-    # self.pen_logits = o_pen_logits
-    # # pen state probabilities (result of applying softmax to self.pen_logits)
-    # self.pen = o_pen
-
-    # # reshape target data so that it is compatible with prediction shape
-    # target = tf.reshape(self.output_x, [-1, 5])
-    # [x1_data, x2_data, eos_data, eoc_data, cont_data] = tf.split(target, 5, 1)
-    # pen_data = tf.concat([eos_data, eoc_data, cont_data], 1)
-
-    # lossfunc = get_lossfunc(o_pi, o_mu1, o_mu2, o_sigma1, o_sigma2, o_corr,
-    #                         o_pen_logits, x1_data, x2_data, pen_data)
-
-    # self.r_cost = tf.reduce_mean(lossfunc)
-
-    # if self.hps.is_training:
-    #   self.lr = tf.Variable(self.hps.learning_rate, trainable=False)
-    #   optimizer = tf.train.AdamOptimizer(self.lr)
-
-    #   self.kl_weight = tf.Variable(self.hps.kl_weight_start, trainable=False)
-    #   self.cost = self.r_cost + self.kl_cost * self.kl_weight
-
-    #   gvs = optimizer.compute_gradients(self.cost)
-    #   g = self.hps.grad_clip
-    #   capped_gvs = [(tf.clip_by_value(grad, -g, g), var) for grad, var in gvs]
-    #   self.train_op = optimizer.apply_gradients(
-    #       capped_gvs, global_step=self.global_step, name='train_step')
+        r = [z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr, z_pen, z_pen_logits]
+        return r
 
     def pre_label_com_loss(hps,sequence_lengths,output,ground_labels,str_labels,batch_triplets):
         batch_size = hps.batch_size
@@ -390,9 +352,9 @@ class Model(object):
         output_shape = output.shape
 
         soft_pre_labels =[]
-        with tf.compat.v1.variable_scope('logic'):
-            logic_w = tf.compat.v1.get_variable('logic_w', [output_shape[2], 2])
-            logic_b = tf.compat.v1.get_variable('logic_b', [2])
+        with tf.variable_scope('logic'):
+            logic_w = tf.get_variable('logic_w', [output_shape[2], 2])
+            logic_b = tf.get_variable('logic_b', [2])
 
         for idx,l in enumerate(tf.unstack(sequence_lengths)):
             c_str_label = tf.cast(tf.squeeze(tf.slice(str_labels, begin=[idx, 0, 0], size=[1, l, l])), tf.float32)
@@ -412,7 +374,7 @@ class Model(object):
             reshape_c_g_l = tf.reshape(c_ground_labels,[-1])
             reshape_c_g_l = tf.multiply(reshape_c_g_l,reshape_str_label)
 
-            logic_wxb = tf.compat.v1.nn.xw_plus_b(reshape_d_f_matrix, logic_w, logic_b)
+            logic_wxb = tf.nn.xw_plus_b(reshape_d_f_matrix, logic_w, logic_b)
             logic_wxb = tf.multiply(logic_wxb,tile_str_label)
 
             sketch_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(reshape_c_g_l,dtype=tf.int32), logits=logic_wxb)
@@ -421,10 +383,10 @@ class Model(object):
             reshape_soft_max_logic = tf.reshape(soft_max_logic, [l, l, 2])
             soft_pre_label = tf.squeeze(tf.slice(reshape_soft_max_logic, begin=[0, 0, 1], size=[l, l, 1]))
             soft_pre_label =tf.multiply(soft_pre_label,c_str_label)
-            pre_label = tf.argmax(input=soft_max_logic,axis=1)
+            pre_label = tf.argmax(soft_max_logic,1)
 
             correct_label = tf.equal(tf.cast(pre_label,dtype=tf.int32),tf.cast(reshape_c_g_l,dtype=tf.int32))
-            accuracy += tf.compat.v1.div(tf.reduce_sum(input_tensor=tf.cast(correct_label,dtype=tf.float32)),tf.cast(l*l,dtype=tf.float32))
+            accuracy += tf.div(tf.reduce_sum(tf.cast(correct_label,dtype=tf.float32)),tf.cast(l*l,dtype=tf.float32))
             soft_pre_labels.append([soft_pre_label])
 
             anc_idx = tf.squeeze(tf.slice(batch_triplets,begin=[idx,0,0],size=[1,1,3000]))
@@ -433,8 +395,8 @@ class Model(object):
             anc = tf.gather(soft_pre_label,anc_idx)
             pos = tf.gather(soft_pre_label,pos_idx)
             neg = tf.gather(soft_pre_label,neg_idx)
-            d_pos = tf.reduce_sum(input_tensor=tf.square(anc - pos), axis=-1)
-            d_neg = tf.reduce_sum(input_tensor=tf.square(anc - neg), axis=-1)
+            d_pos = tf.reduce_sum(tf.square(anc - pos), -1)
+            d_neg = tf.reduce_sum(tf.square(anc - neg), -1)
             triplet_loss = tf.maximum(0., d_pos - d_neg+2.5)
             #triplet_loss = d_pos - d_neg
             if idx==0:
@@ -466,15 +428,15 @@ class Model(object):
     lossfunc = get_lossfunc(o_pi, o_mu1, o_mu2, o_sigma1, o_sigma2, o_corr,
                             o_pen_logits, x1_data, x2_data, pen_data)
 
-    self.r_cost = tf.reduce_mean(input_tensor=lossfunc)
+    self.r_cost = tf.reduce_mean(lossfunc)
 
     self.sketch_loss,self.triplets_loss, self.accuracy, self.out_pre_labels= pre_label_com_loss(hps, self.sequence_lengths,feat_out,self.labels,self.str_labels,self.triplets)
    # self.my_loss,self.accuracy,self.out_pre_labels,test_paramater =pre_label_com_loss(hps,self.sequence_lengths,feat_out,self.labels,self.str_labels)
-    self.g_cost = tf.reduce_mean(input_tensor=self.sketch_loss)
-    self.t_cost = tf.reduce_mean(input_tensor=self.triplets_loss)
+    self.g_cost = tf.reduce_mean(self.sketch_loss)
+    self.t_cost = tf.reduce_mean(self.triplets_loss)
     # if self.hps.is_training:
     self.lr = tf.Variable(self.hps.learning_rate, trainable=False)
-    optimizer = tf.compat.v1.train.AdamOptimizer(self.lr)
+    optimizer = tf.train.AdamOptimizer(self.lr)
 
     self.r_weight = tf.Variable(self.hps.kl_weight, trainable=False)
     self.cost = self.g_cost+self.r_cost*self.r_weight+self.t_cost*0.6+self.kl_cost*0.02

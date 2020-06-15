@@ -22,7 +22,7 @@ import svgwrite
 import scipy.io as scio
 import pre_label2BSR
 from copy import deepcopy
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
+tf.logging.set_verbosity(tf.logging.INFO)
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -168,7 +168,7 @@ def load_dataset(data_dir, model_params, inference_mode=False):
 
     model_params.max_seq_len = max_seq_len
 
-    tf.compat.v1.logging.info('model_params.max_seq_len %i.', model_params.max_seq_len)
+    tf.logging.info('model_params.max_seq_len %i.', model_params.max_seq_len)
 
     eval_model_params = sketch_rnn_model.copy_hparams(model_params)
 
@@ -212,7 +212,7 @@ def load_dataset(data_dir, model_params, inference_mode=False):
        augment_stroke_prob=0.0)
     test_set.normalize(normalizing_scale_factor)
 
-    tf.compat.v1.logging.info('normalizing_scale_factor %4.4f.', normalizing_scale_factor)
+    tf.logging.info('normalizing_scale_factor %4.4f.', normalizing_scale_factor)
 
     result = [train_set, valid_set, test_set, model_params, eval_model_params, sample_model_params]
 
@@ -229,7 +229,7 @@ def get_init_fn(checkpoint_dir, checkpoint_exclude_scopes):
 
     variables_to_restore = []
 
-    for var in tf.compat.v1.trainable_variables():
+    for var in tf.trainable_variables():
         excluded = False
         for exclusion in exclusions:
             if var.op.name.startswith(exclusion):
@@ -260,7 +260,7 @@ class PG_cluster_Rnn():
 
     def __init__(self, dataset, RC=True, updateCNN=True, eta=0.9):
 
-        self.sess = tf.compat.v1.InteractiveSession()
+        self.sess = tf.InteractiveSession()
 
         self.dataset = dataset
         self.RC = RC
@@ -272,11 +272,11 @@ class PG_cluster_Rnn():
         if FLAGS.hparams:
             self.model_params.parse(FLAGS.hparams)
 
-        tf.compat.v1.logging.info('sketch-rnn')
-        tf.compat.v1.logging.info('Hyperparams:')
+        tf.logging.info('sketch-rnn')
+        tf.logging.info('Hyperparams:')
         for key, val in six.iteritems(self.model_params.values()):
-            tf.compat.v1.logging.info('%s = %s', key, str(val))
-        tf.compat.v1.logging.info('Loading data files.')
+            tf.logging.info('%s = %s', key, str(val))
+        tf.logging.info('Loading data files.')
 
         datasets = load_dataset(FLAGS.data_dir, self.model_params)
 
@@ -292,8 +292,8 @@ class PG_cluster_Rnn():
         self.model = sketch_rnn_model.Model(model_params)
         self.eval_model = sketch_rnn_model.Model(eval_model_params, reuse=True)
 
-        tf.io.gfile.makedirs(FLAGS.log_root)
-        with tf.io.gfile.GFile(
+        tf.gfile.MakeDirs(FLAGS.log_root)
+        with tf.gfile.Open(
                 os.path.join(FLAGS.log_root, 'model_config.json'), 'w') as f:
             json.dump(self.model_params.values(), f, indent=True)
 
@@ -529,13 +529,13 @@ class PG_cluster_Rnn():
     def cluster_model(self,):
         hps = self.model.hps
 
-        self.y = tf.compat.v1.placeholder(tf.float32, shape=[None, 1])
-        self.real_line_idx = tf.compat.v1.placeholder(tf.int32, shape=[None, 1])
+        self.y = tf.placeholder(tf.float32, shape=[None, 1])
+        self.real_line_idx = tf.placeholder(tf.int32, shape=[None, 1])
         self.group_matrix = tf.squeeze(self.model.out_pre_labels)
         self.real_group_matrix = tf.gather(self.group_matrix,self.real_line_idx)
 
         total_loss = self.model.cost
-        optimizer = tf.compat.v1.train.AdamOptimizer(self.model.lr)
+        optimizer = tf.train.AdamOptimizer(self.model.lr)
         gvs = optimizer.compute_gradients(total_loss)
         g = hps.grad_clip
         for grad, var in gvs:
@@ -689,23 +689,23 @@ class PG_cluster_Rnn():
         hps = self.model_params
 
         self.cluster_model()
-        self.sess.run(tf.compat.v1.global_variables_initializer())
-        self.saver = tf.compat.v1.train.Saver(tf.compat.v1.global_variables())
+        self.sess.run(tf.global_variables_initializer())
+        self.saver = tf.train.Saver(tf.global_variables())
         if FLAGS.resume_training:
             init_op = get_init_fn(FLAGS.log_root, [])
             init_op(self.sess)
 
-        t_vars = tf.compat.v1.trainable_variables()
+        t_vars = tf.trainable_variables()
         count_t_vars = 0
         for var in t_vars:
             num_param = np.prod(var.get_shape().as_list())
             count_t_vars += num_param
-            tf.compat.v1.logging.info('%s %s %i', var.name, str(var.get_shape()), num_param)
-        tf.compat.v1.logging.info('Total trainable variables %i.', count_t_vars)
-        model_summ = tf.compat.v1.summary.Summary()
+            tf.logging.info('%s %s %i', var.name, str(var.get_shape()), num_param)
+        tf.logging.info('Total trainable variables %i.', count_t_vars)
+        model_summ = tf.summary.Summary()
         model_summ.value.add(
             tag='Num_Trainable_Params', simple_value=float(count_t_vars))
-        summary_writer = tf.compat.v1.summary.FileWriter(FLAGS.log_root)
+        summary_writer = tf.summary.FileWriter(FLAGS.log_root)
         summary_writer.add_summary(model_summ, 0)
         summary_writer.flush()
 

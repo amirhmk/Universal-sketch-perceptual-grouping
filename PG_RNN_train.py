@@ -287,6 +287,7 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
     (triplet_loss,g_cost,train_accuracy, _, pre_labels,train_step, _) = sess.run([
         model.triplets_loss,model.g_cost,model.accuracy,model.final_state,model.out_pre_labels,
         model.global_step, model.train_op], feed)
+    # print("pre_labels", pre_labels, len(pre_labels[0]))
     if step % 10 == 0 and step > 0:
     #if step % 1 == 0 and step > 0:
       end = time.time()

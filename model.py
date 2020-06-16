@@ -26,7 +26,7 @@ import rnn
 def copy_hparams(hparams):
   """Return a copy of an HParams instance."""
   return tf.contrib.training.HParams(**hparams.values())
-
+  
 
 def get_default_hparams():
   """Return default HParams for sketch-rnn."""
@@ -344,51 +344,82 @@ class Model(object):
         r = [z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr, z_pen, z_pen_logits]
         return r
 
+    # output: pred  
     def pre_label_com_loss(hps,sequence_lengths,output,ground_labels,str_labels,batch_triplets):
         batch_size = hps.batch_size
         # loss = 0
         accuracy =0
+        # max_seq_len = 300
         output = tf.reshape(output,[batch_size,hps.max_seq_len,-1])
+        # Output shape after:  (100, 300, 128)
         output_shape = output.shape
 
         soft_pre_labels =[]
         with tf.variable_scope('logic'):
-            logic_w = tf.get_variable('logic_w', [output_shape[2], 2])
-            logic_b = tf.get_variable('logic_b', [2])
-
-        for idx,l in enumerate(tf.unstack(sequence_lengths)):
-            c_str_label = tf.cast(tf.squeeze(tf.slice(str_labels, begin=[idx, 0, 0], size=[1, l, l])), tf.float32)
+            logic_w = tf.get_variable('logic_w', [output_shape[2], 2]) # (128, 2)
+            logic_b = tf.get_variable('logic_b', [2]) # (128,)
+        # str_labels shape (100, 300, 300)
+        # (batch size, sequence_size, embedding_size)
+        # tf.unstack:
+        # Unpacks the given dimension of a rank-R tensor into rank-(R-1) tensors.
+        for idx,seq_len in enumerate(tf.unstack(sequence_lengths)):
+            # Tensor("vector_rnn/unstack:seq_len", shape=(), dtype=int32)
+            c_str_label = tf.cast(tf.squeeze(tf.slice(str_labels, begin=[idx, 0, 0], size=[1, seq_len, seq_len])), tf.float32)
             reshape_str_label = tf.reshape(c_str_label,[-1])
+            # Flatten the stroke label
             tile_str_label = tf.tile(tf.expand_dims(reshape_str_label,1),[1,2])
+            # tile_str_label shape (?, 2)
 
-            feats = tf.squeeze(tf.slice(output, begin=[idx, 0, 0], size=[1, l, output_shape[2]]))
+            # output_shape[2]: 128
+            # Output shape after:  (100, 300, 128)
+            # tf.slice:
+            # This operation extracts a slice of size size from a tensor input_ starting at the location specified by begin
+            feats = tf.squeeze(tf.slice(output, begin=[idx, 0, 0], size=[1, seq_len, output_shape[2]]))
+            # This is unknown as well..., but I think it would be [1, 300, 128], so just one batch of all sequences
+            # c = i
+            # r = j
             c_feats = tf.expand_dims(feats,1)
             r_feats = tf.expand_dims(feats,0)
-            c_tile = tf.tile(c_feats,[1,l,1])
-            r_tile = tf.tile(r_feats,[l,1,1])
+            c_tile = tf.tile(c_feats,[1,seq_len,1])
+            r_tile = tf.tile(r_feats,[seq_len,1,1])
             delta_feats = tf.abs(c_tile-r_tile)
-
+            # print("delta_feats", delta_feats, delta_feats.get_shape())
             reshape_d_f_matrix = tf.reshape(delta_feats,[-1,output_shape[2]])
+            # reshape_d_f_matrix shape (?, 128)
+            # This could be the number of strokes? no idea
 
-            c_ground_labels = tf.cast(tf.squeeze(tf.slice(ground_labels,begin=[idx,0,0],size=[1,l,l])),tf.float32)
+            c_ground_labels = tf.cast(tf.squeeze(tf.slice(ground_labels,begin=[idx,0,0],size=[1,seq_len,seq_len])),tf.float32)
             reshape_c_g_l = tf.reshape(c_ground_labels,[-1])
             reshape_c_g_l = tf.multiply(reshape_c_g_l,reshape_str_label)
 
+            # logic_w shape (128, 2)
+            # logic_b shape (2,)
             logic_wxb = tf.nn.xw_plus_b(reshape_d_f_matrix, logic_w, logic_b)
+            # print("logic_b", logic_b.shape)
+            # print("logic_wxb1", logic_wxb.shape, logic_w, logic_w.shape)
             logic_wxb = tf.multiply(logic_wxb,tile_str_label)
-
+            # print("logic_wxb2", logic_wxb.shape)
+            # Local Grouping Loss: sketch_loss
+            # Find out how logic_wxb -> G^HAT
             sketch_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(reshape_c_g_l,dtype=tf.int32), logits=logic_wxb)
+            # saliency_loss =
+            # input seqs,logic_wx output: saliency_loss
 
             soft_max_logic = tf.nn.softmax(logic_wxb)
-            reshape_soft_max_logic = tf.reshape(soft_max_logic, [l, l, 2])
-            soft_pre_label = tf.squeeze(tf.slice(reshape_soft_max_logic, begin=[0, 0, 1], size=[l, l, 1]))
+            reshape_soft_max_logic = tf.reshape(soft_max_logic, [seq_len, seq_len, 2])
+            soft_pre_label = tf.squeeze(tf.slice(reshape_soft_max_logic, begin=[0, 0, 1], size=[seq_len, seq_len, 1]))
             soft_pre_label =tf.multiply(soft_pre_label,c_str_label)
             pre_label = tf.argmax(soft_max_logic,1)
 
             correct_label = tf.equal(tf.cast(pre_label,dtype=tf.int32),tf.cast(reshape_c_g_l,dtype=tf.int32))
-            accuracy += tf.div(tf.reduce_sum(tf.cast(correct_label,dtype=tf.float32)),tf.cast(l*l,dtype=tf.float32))
+            #tf.reduce_sum:
+            # Computes the sum of elements across dimensions of a tensor, flattened sum
+            accuracy += tf.div(tf.reduce_sum(tf.cast(correct_label,dtype=tf.float32)),tf.cast(seq_len*seq_len,dtype=tf.float32))
+
+            # This may be G!! group_matrix
             soft_pre_labels.append([soft_pre_label])
 
+            # Triplet Loss
             anc_idx = tf.squeeze(tf.slice(batch_triplets,begin=[idx,0,0],size=[1,1,3000]))
             pos_idx = tf.squeeze(tf.slice(batch_triplets, begin=[idx, 1, 0], size=[1, 1, 3000]))
             neg_idx = tf.squeeze(tf.slice(batch_triplets, begin=[idx, 2, 0], size=[1, 1, 3000]))
@@ -425,20 +456,24 @@ class Model(object):
     [x1_data, x2_data, eos_data, eoc_data, cont_data] = tf.split(target, 5, 1)
     pen_data = tf.concat([eos_data, eoc_data, cont_data], 1)
 
+    # Reconstrunction loss
     lossfunc = get_lossfunc(o_pi, o_mu1, o_mu2, o_sigma1, o_sigma2, o_corr,
                             o_pen_logits, x1_data, x2_data, pen_data)
 
     self.r_cost = tf.reduce_mean(lossfunc)
 
-    self.sketch_loss,self.triplets_loss, self.accuracy, self.out_pre_labels= pre_label_com_loss(hps, self.sequence_lengths,feat_out,self.labels,self.str_labels,self.triplets)
-   # self.my_loss,self.accuracy,self.out_pre_labels,test_paramater =pre_label_com_loss(hps,self.sequence_lengths,feat_out,self.labels,self.str_labels)
+    self.sketch_loss,self.triplets_loss, self.accuracy, self.out_pre_labels= pre_label_com_loss(hps, self.sequence_lengths,feat_out,self.labels, self.str_labels,self.triplets)
+    # self.my_loss,self.accuracy,self.out_pre_labels,test_paramater =pre_label_com_loss(hps,self.sequence_lengths,feat_out,self.labels,self.str_labels)
+    # Grouping loss
     self.g_cost = tf.reduce_mean(self.sketch_loss)
+    # Triplet Loss/Global Grouping
     self.t_cost = tf.reduce_mean(self.triplets_loss)
     # if self.hps.is_training:
     self.lr = tf.Variable(self.hps.learning_rate, trainable=False)
     optimizer = tf.train.AdamOptimizer(self.lr)
 
     self.r_weight = tf.Variable(self.hps.kl_weight, trainable=False)
+    # Total Loss
     self.cost = self.g_cost+self.r_cost*self.r_weight+self.t_cost*0.6+self.kl_cost*0.02
 
     gvs = optimizer.compute_gradients(self.cost)

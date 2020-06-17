@@ -90,9 +90,6 @@ class Model(object):
 
   def encoder(self, batch, sequence_lengths):
     """Define the bi-directional encoder module of sketch-rnn."""
-
-
-
     unused_outputs, last_states = tf.nn.bidirectional_dynamic_rnn(
         self.enc_cell_fw,
         self.enc_cell_bw,
@@ -208,7 +205,7 @@ class Model(object):
     )
     # The target/expected vectors of strokes
     self.output_x = self.input_data[:, 1:self.hps.max_seq_len + 1, :]
-    self.input_x = self.input_data[:, 1:self.hps.max_seq_len+1, :]
+    self.input_x = self.input_data[:, 1:self.hps.max_seq_len + 1, :]
 
     # either do vae-bit and get z, or do unconditional, decoder-only
     if hps.conditional:  # vae mode:
@@ -367,6 +364,7 @@ class Model(object):
             c_str_label = tf.cast(tf.squeeze(tf.slice(str_labels, begin=[idx, 0, 0], size=[1, seq_len, seq_len])), tf.float32)
             reshape_str_label = tf.reshape(c_str_label,[-1])
             # Flatten the stroke label
+            # tf.tile: Constructs a tensor by tiling a given tensor. This will copy across columns
             tile_str_label = tf.tile(tf.expand_dims(reshape_str_label,1),[1,2])
             # tile_str_label shape (?, 2)
 
@@ -383,10 +381,9 @@ class Model(object):
             c_tile = tf.tile(c_feats,[1,seq_len,1])
             r_tile = tf.tile(r_feats,[seq_len,1,1])
             delta_feats = tf.abs(c_tile-r_tile)
-            # print("delta_feats", delta_feats, delta_feats.get_shape())
+            # Feature Difference Matrix D
             reshape_d_f_matrix = tf.reshape(delta_feats,[-1,output_shape[2]])
             # reshape_d_f_matrix shape (?, 128)
-            # This could be the number of strokes? no idea
 
             c_ground_labels = tf.cast(tf.squeeze(tf.slice(ground_labels,begin=[idx,0,0],size=[1,seq_len,seq_len])),tf.float32)
             reshape_c_g_l = tf.reshape(c_ground_labels,[-1])
@@ -395,15 +392,17 @@ class Model(object):
             # logic_w shape (128, 2)
             # logic_b shape (2,)
             logic_wxb = tf.nn.xw_plus_b(reshape_d_f_matrix, logic_w, logic_b)
-            # print("logic_b", logic_b.shape)
-            # print("logic_wxb1", logic_wxb.shape, logic_w, logic_w.shape)
             logic_wxb = tf.multiply(logic_wxb,tile_str_label)
-            # print("logic_wxb2", logic_wxb.shape)
             # Local Grouping Loss: sketch_loss
             # Find out how logic_wxb -> G^HAT
+            # reshape_c_g_l is flattened
+            # Logits: Unscaled log probabilities of shape [d_0, d_1, ...,, num_classes]
+            # Labels: Tensor of shape [d_0, d_1, ..., d_{r-1}]. Each entry in labels must be an index in [0, num_classes)
             sketch_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(reshape_c_g_l,dtype=tf.int32), logits=logic_wxb)
-            # saliency_loss =
+            # sketch_loss shape will be the same as labels (Each stroke will have a label)
+            # saliency_loss = 
             # input seqs,logic_wx output: saliency_loss
+            # sketch_loss += saliency_loss
 
             soft_max_logic = tf.nn.softmax(logic_wxb)
             reshape_soft_max_logic = tf.reshape(soft_max_logic, [seq_len, seq_len, 2])
@@ -413,7 +412,7 @@ class Model(object):
 
             correct_label = tf.equal(tf.cast(pre_label,dtype=tf.int32),tf.cast(reshape_c_g_l,dtype=tf.int32))
             #tf.reduce_sum:
-            # Computes the sum of elements across dimensions of a tensor, flattened sum
+            # Flattened sum
             accuracy += tf.div(tf.reduce_sum(tf.cast(correct_label,dtype=tf.float32)),tf.cast(seq_len*seq_len,dtype=tf.float32))
 
             # This may be G!! group_matrix
@@ -462,7 +461,7 @@ class Model(object):
 
     self.r_cost = tf.reduce_mean(lossfunc)
 
-    self.sketch_loss,self.triplets_loss, self.accuracy, self.out_pre_labels= pre_label_com_loss(hps, self.sequence_lengths,feat_out,self.labels, self.str_labels,self.triplets)
+    self.sketch_loss,self.triplets_loss, self.accuracy, self.out_pre_labels = pre_label_com_loss(hps, self.sequence_lengths,feat_out,self.labels, self.str_labels,self.triplets)
     # self.my_loss,self.accuracy,self.out_pre_labels,test_paramater =pre_label_com_loss(hps,self.sequence_lengths,feat_out,self.labels,self.str_labels)
     # Grouping loss
     self.g_cost = tf.reduce_mean(self.sketch_loss)

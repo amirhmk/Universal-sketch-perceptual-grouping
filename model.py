@@ -356,11 +356,10 @@ class Model(object):
             logic_w = tf.get_variable('logic_w', [output_shape[2], 2]) # (128, 2)
             logic_b = tf.get_variable('logic_b', [2]) # (128,)
         # str_labels shape (100, 300, 300)
-        # (batch size, sequence_size, embedding_size)
         # tf.unstack:
         # Unpacks the given dimension of a rank-R tensor into rank-(R-1) tensors.
         for idx,seq_len in enumerate(tf.unstack(sequence_lengths)):
-            # Tensor("vector_rnn/unstack:seq_len", shape=(), dtype=int32)
+            # str_label is the label state. 0 Means start, 1 means drawing
             c_str_label = tf.cast(tf.squeeze(tf.slice(str_labels, begin=[idx, 0, 0], size=[1, seq_len, seq_len])), tf.float32)
             reshape_str_label = tf.reshape(c_str_label,[-1])
             # Flatten the stroke label
@@ -372,6 +371,7 @@ class Model(object):
             # Output shape after:  (100, 300, 128)
             # tf.slice:
             # This operation extracts a slice of size size from a tensor input_ starting at the location specified by begin
+            # This is the f_vec from t=0 to t=300/seq_len (if lower)
             feats = tf.squeeze(tf.slice(output, begin=[idx, 0, 0], size=[1, seq_len, output_shape[2]]))
             # This is unknown as well..., but I think it would be [1, 300, 128], so just one batch of all sequences
             # c = i
@@ -387,24 +387,29 @@ class Model(object):
 
             c_ground_labels = tf.cast(tf.squeeze(tf.slice(ground_labels,begin=[idx,0,0],size=[1,seq_len,seq_len])),tf.float32)
             reshape_c_g_l = tf.reshape(c_ground_labels,[-1])
+            # This basically takes the ground_truth values and assignms them to all the different classes, as there is multi
             reshape_c_g_l = tf.multiply(reshape_c_g_l,reshape_str_label)
 
             # logic_w shape (128, 2)
             # logic_b shape (2,)
             logic_wxb = tf.nn.xw_plus_b(reshape_d_f_matrix, logic_w, logic_b)
+            # 0 out any stroke that is not in "Drawing" mode
             logic_wxb = tf.multiply(logic_wxb,tile_str_label)
             # Local Grouping Loss: sketch_loss
             # Find out how logic_wxb -> G^HAT
             # reshape_c_g_l is flattened
             # Logits: Unscaled log probabilities of shape [d_0, d_1, ...,, num_classes]
             # Labels: Tensor of shape [d_0, d_1, ..., d_{r-1}]. Each entry in labels must be an index in [0, num_classes)
-            sketch_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(reshape_c_g_l,dtype=tf.int32), logits=logic_wxb)
+            soft_max_logic = tf.nn.softmax(logic_wxb)
+            # sketch_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(reshape_c_g_l,dtype=tf.int32), logits=logic_wxb)
+            sketch_loss = tf.keras.losses.sparse_categorical_crossentropy(tf.cast(reshape_c_g_l, dtype=tf.int32), soft_max_logic)
+
+              # tf.cast(reshape_c_g_l,dtype=tf.int32), soft_max_logic)
             # sketch_loss shape will be the same as labels (Each stroke will have a label)
             # saliency_loss = 
             # input seqs,logic_wx output: saliency_loss
             # sketch_loss += saliency_loss
 
-            soft_max_logic = tf.nn.softmax(logic_wxb)
             reshape_soft_max_logic = tf.reshape(soft_max_logic, [seq_len, seq_len, 2])
             soft_pre_label = tf.squeeze(tf.slice(reshape_soft_max_logic, begin=[0, 0, 1], size=[seq_len, seq_len, 1]))
             soft_pre_label =tf.multiply(soft_pre_label,c_str_label)

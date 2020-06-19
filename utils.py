@@ -313,10 +313,10 @@ class DataLoader(object):
       seq_len.append(length)
 
     # We return three things: stroke-3 format, stroke-5 format, list of seq_len.
-
-    pad_data,pad_labels,pad_str_labels = self.test_pad_batch(x_batch, self.max_seq_length)
+    pad_data,pad_labels,pad_str_labels, saliency = self.test_pad_batch(x_batch, self.max_seq_length)
     seq_len = np.array(seq_len, dtype=int)
-    return x_batch, pad_data,pad_labels,pad_str_labels, seq_len
+    print("saliency", saliency)
+    return x_batch, pad_data, pad_labels, pad_str_labels, seq_len, saliency
 
   def random_batch(self):
     """Return a randomised portion of the training data."""
@@ -442,6 +442,8 @@ class DataLoader(object):
           new_seq_len[ii] = seq_len[i]
           ii +=1
       else:
+        # labels: (100, 300, 300)
+        # gap_seg_labels: (100, 300, 300)
         return result, labels, gap_seg_labels, new_seq_len,batch_triplets
 
 
@@ -453,6 +455,7 @@ class DataLoader(object):
     result = np.zeros((self.batch_size, max_len + 1, 5), dtype=float)
     labels = np.zeros((self.batch_size,max_len, max_len), dtype='int32')
     gap_seg_labels = np.ones((self.batch_size,max_len,max_len),dtype='int32')
+    saliency = np.zeros((self.batch_size, max_len, max_len), dtype='float32')
     #pad_stroke_nums = []
     assert len(batch) == self.batch_size
     for i in range(self.batch_size):
@@ -471,6 +474,8 @@ class DataLoader(object):
       result[i, 0, 4] = self.start_stroke_token[4]
       stroke_labels = batch[i][:, 3]
       temp_sep_label = np.ones((max_len,1),dtype='int32')
+      # Saliency 
+      saliency[i, :, :] = get_saliency(batch[i][:, 0:1], max_len)
       for line_indx in range(l):
         if line_indx>0:
           if batch[i][line_indx-1,2]==1:
@@ -486,4 +491,9 @@ class DataLoader(object):
       #pad_stroke_nums.append([batch[i][:,3]])
       temp_sep_label[0, 0] = 0
       gap_seg_labels[i,:,:]=np.dot(temp_sep_label,temp_sep_label.T)
-    return result,labels,gap_seg_labels#,pad_stroke_nums
+    return result, labels, gap_seg_labels, saliency # ,pad_stroke_nums
+
+
+def get_saliency(batch_strokes, max_len):
+  saliency = np.random.uniform((max_len, max_len), dtype='float32')
+  return saliency

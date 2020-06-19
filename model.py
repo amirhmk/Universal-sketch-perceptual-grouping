@@ -199,6 +199,9 @@ class Model(object):
     self.str_labels = tf.placeholder(
         dtype=tf.int32,
         shape=[self.hps.batch_size,self.hps.max_seq_len,self.hps.max_seq_len])
+    self.saliency = tf.placeholder(
+        dtype=tf.float32,
+        shape=[self.hps.batch_size, self.hps.max_seq_len, self.hps.max_seq_len])
     self.triplets = tf.placeholder(
         dtype=tf.int32,
         shape=[self.hps.batch_size,3,3000]
@@ -381,6 +384,7 @@ class Model(object):
             c_tile = tf.tile(c_feats,[1,seq_len,1])
             r_tile = tf.tile(r_feats,[seq_len,1,1])
             delta_feats = tf.abs(c_tile-r_tile)
+            # delta_feats += saliency_difference()
             # Feature Difference Matrix D
             reshape_d_f_matrix = tf.reshape(delta_feats,[-1,output_shape[2]])
             # reshape_d_f_matrix shape (?, 128)
@@ -404,7 +408,7 @@ class Model(object):
             # sketch_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(reshape_c_g_l,dtype=tf.int32), logits=logic_wxb)
             sketch_loss = tf.keras.losses.sparse_categorical_crossentropy(tf.cast(reshape_c_g_l, dtype=tf.int32), soft_max_logic)
 
-              # tf.cast(reshape_c_g_l,dtype=tf.int32), soft_max_logic)
+            # tf.cast(reshape_c_g_l,dtype=tf.int32), soft_max_logic)
             # sketch_loss shape will be the same as labels (Each stroke will have a label)
             # saliency_loss = 
             # input seqs,logic_wx output: saliency_loss

@@ -8,3 +8,5 @@ model_config.json
 models/vector-5700.data-00000-of-00001
 utils.pyc
 
+settings.json
+report.txt

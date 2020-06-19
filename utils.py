@@ -294,9 +294,9 @@ class DataLoader(object):
       seq_len.append(length)
 
     # We return three things: stroke-3 format, stroke-5 format, list of seq_len.
-    pad_data,pad_labels,pad_str_labels,new_seq_len,batch_triplets = self.train_pad_batch(x_batch, self.max_seq_length,seq_len)
+    pad_data,pad_labels,pad_str_labels,new_seq_len,batch_triplets, saliency = self.train_pad_batch(x_batch, self.max_seq_length,seq_len)
     #seq_len = np.array(seq_len, dtype=int)
-    return x_batch, pad_data,pad_labels,pad_str_labels, new_seq_len,batch_triplets
+    return x_batch, pad_data,pad_labels,pad_str_labels, new_seq_len,batch_triplets, saliency
 
   def test_get_batch_from_indices(self, indices):
     """Given a list of indices, return the potentially augmented batch."""
@@ -400,6 +400,7 @@ class DataLoader(object):
     new_seq_len = np.zeros((self.batch_size),dtype='int32')
     pad_stroke_nums = []
     batch_triplets = np.zeros((self.batch_size,3,3000),dtype='int32')
+    saliency = np.zeros((self.batch_size, max_len, max_len), dtype='float32')
     ii =0
     for i in range(len(batch)):
       stroke_labels = batch[i][:, 3]
@@ -407,6 +408,7 @@ class DataLoader(object):
       temp_label_matrix = np.zeros((max_len, max_len), dtype='int32')
       l = len(batch[i])
       assert l <= max_len
+      saliency[i, :, :] = get_saliency(batch[i][:, 0:1], max_len)
       for line_indx in range(l):
         if line_indx>0:
           if batch[i][line_indx-1,2]==1:
@@ -444,7 +446,7 @@ class DataLoader(object):
       else:
         # labels: (100, 300, 300)
         # gap_seg_labels: (100, 300, 300)
-        return result, labels, gap_seg_labels, new_seq_len,batch_triplets
+        return result, labels, gap_seg_labels, new_seq_len,batch_triplets, saliency
 
 
     #return result,labels,gap_seg_labels,new_seq_len

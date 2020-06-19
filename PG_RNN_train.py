@@ -272,14 +272,15 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
     curr_kl_weight = (hps.kl_weight - (hps.kl_weight - hps.kl_weight_start) *
                       (hps.kl_decay_rate)**(step/3))
 
-    _, x,labels,seg_labels, s,triplet_label = train_set.random_batch()
+    _, x,labels,seg_labels, s,triplet_label, saliency = train_set.random_batch()
     feed = {
         model.input_data: x,
         model.sequence_lengths: s,
         model.lr: curr_learning_rate,
         model.labels:labels,
         model.str_labels:seg_labels,
-        model.triplets:triplet_label
+        model.triplets:triplet_label,
+        model.saliency: saliency
     }
     (triplet_loss,g_cost,train_accuracy, _, pre_labels,train_step, _) = sess.run([
         model.triplets_loss,model.g_cost,model.accuracy,model.final_state,model.out_pre_labels,

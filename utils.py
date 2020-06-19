@@ -497,5 +497,5 @@ class DataLoader(object):
 
 
 def get_saliency(batch_strokes, max_len):
-  saliency = np.random.uniform((max_len, max_len), dtype='float32')
+  saliency = np.random.uniform((max_len, max_len))
   return saliency

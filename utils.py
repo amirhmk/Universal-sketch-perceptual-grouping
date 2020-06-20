@@ -408,7 +408,6 @@ class DataLoader(object):
       temp_label_matrix = np.zeros((max_len, max_len), dtype='int32')
       l = len(batch[i])
       assert l <= max_len
-      saliency[i, :, :] = get_saliency(batch[i][:, 0:1], max_len)
       for line_indx in range(l):
         if line_indx>0:
           if batch[i][line_indx-1,2]==1:
@@ -442,6 +441,7 @@ class DataLoader(object):
 
           batch_triplets[ii,:,:]=self.get_triplets(temp_str_label,batch[i][:,3])
           new_seq_len[ii] = seq_len[i]
+          saliency[ii, :, :] = get_saliency(batch[i][:, 0:1], max_len)
           ii +=1
       else:
         # labels: (100, 300, 300)
@@ -497,5 +497,5 @@ class DataLoader(object):
 
 
 def get_saliency(batch_strokes, max_len):
-  saliency = np.random.uniform((max_len, max_len))
+  saliency = np.random.uniform(size=(max_len, max_len))
   return saliency

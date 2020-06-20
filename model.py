@@ -444,7 +444,7 @@ class Model(object):
             else:
                 sketch_cost = tf.concat([sketch_cost,sketch_loss],0)
                 triplet_cost = tf.concat([triplet_cost,triplet_loss],0)
-        return sketch_cost,triplet_cost,accuracy/batch_size,soft_pre_labels#,tf.cast(test_loss,dtype=tf.float32)
+                return sketch_cost,triplet_cost,accuracy/batch_size,soft_pre_labels,soft_max_logic#,tf.cast(test_loss,dtype=tf.float32)
 
     out = get_mixture_coef(output)
     [o_pi, o_mu1, o_mu2, o_sigma1, o_sigma2, o_corr, o_pen, o_pen_logits] = out
@@ -470,7 +470,7 @@ class Model(object):
 
     self.r_cost = tf.reduce_mean(lossfunc)
 
-    self.sketch_loss,self.triplets_loss, self.accuracy, self.out_pre_labels = pre_label_com_loss(hps, self.sequence_lengths,feat_out,self.labels, self.str_labels,self.triplets)
+    self.sketch_loss,self.triplets_loss, self.accuracy, self.out_pre_labels, self.pre_label_com_loss = pre_label_com_loss(hps, self.sequence_lengths,feat_out,self.labels, self.str_labels,self.triplets)
     # self.my_loss,self.accuracy,self.out_pre_labels,test_paramater =pre_label_com_loss(hps,self.sequence_lengths,feat_out,self.labels,self.str_labels)
     # Grouping loss
     self.g_cost = tf.reduce_mean(self.sketch_loss)

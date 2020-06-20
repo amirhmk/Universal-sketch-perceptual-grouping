@@ -287,7 +287,8 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
         model.str_labels:seg_labels,
         model.triplets:triplet_label,
         model.saliency: saliency
-    
+    }
+        
     (triplet_loss,g_cost,train_accuracy, _, pre_labels,train_step, _, G_hat) = sess.run([
         model.triplets_loss,model.g_cost,model.accuracy,model.final_state,model.out_pre_labels,
         model.global_step, model.train_op, model.G_hat], feed)

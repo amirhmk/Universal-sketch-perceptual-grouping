@@ -197,8 +197,14 @@ def evaluate_model(sess, model, data_set):
   total_g_cost=0.0
   test_ac=0.0
   for batch in range(data_set.num_batches):
-    unused_orig_x, x,labels,str_labels, s = data_set.get_batch(batch)
-    feed = {model.input_data: x, model.sequence_lengths: s,model.labels:labels,model.str_labels:str_labels}
+    unused_orig_x, x,labels,str_labels, s, saliency = data_set.get_batch(batch)
+    feed = {
+      model.input_data: x,
+      model.sequence_lengths: s,
+      model.labels:labels,
+      model.str_labels:str_labels,
+      model.saliency: saliency
+    }
     (g_cost,ac) = sess.run([model.g_cost,model.accuracy], feed)
 
     total_g_cost += g_cost

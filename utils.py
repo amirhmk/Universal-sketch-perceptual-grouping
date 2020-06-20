@@ -315,7 +315,6 @@ class DataLoader(object):
     # We return three things: stroke-3 format, stroke-5 format, list of seq_len.
     pad_data,pad_labels,pad_str_labels, saliency = self.test_pad_batch(x_batch, self.max_seq_length)
     seq_len = np.array(seq_len, dtype=int)
-    print("saliency", saliency)
     return x_batch, pad_data, pad_labels, pad_str_labels, seq_len, saliency
 
   def random_batch(self):

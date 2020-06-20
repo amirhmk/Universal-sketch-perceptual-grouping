@@ -444,7 +444,7 @@ class Model(object):
             else:
                 sketch_cost = tf.concat([sketch_cost,sketch_loss],0)
                 triplet_cost = tf.concat([triplet_cost,triplet_loss],0)
-                return sketch_cost,triplet_cost,accuracy/batch_size,soft_pre_labels#,tf.cast(test_loss,dtype=tf.float32)
+            return sketch_cost,triplet_cost,accuracy/batch_size,soft_pre_labels#,tf.cast(test_loss,dtype=tf.float32)
 
     out = get_mixture_coef(output)
     [o_pi, o_mu1, o_mu2, o_sigma1, o_sigma2, o_corr, o_pen, o_pen_logits] = out

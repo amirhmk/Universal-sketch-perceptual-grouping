@@ -41,16 +41,15 @@ def data2abspoints(data):
     return abspoints,stroke_group
 
 
-def draw_sketch_with_strokes(data,svg_name,stroke_group,evaluate_file_path,img_file_name=None):
+def draw_sketch_with_strokes(data, svg_name, stroke_group, evaluate_file_path, img_file_name=None):
 
-    assert len(data)==len(stroke_group)
+    # assert len(data)==len(stroke_group)
     dims = (256,256)
     abspoints,stroke_group=data2abspoints(data)
     # abspoints, _ = data2abspoints(data)
     unique_stroke_group = np.unique(stroke_group)
     bsd_data = np.zeros((256,256),dtype=np.uint8)
     image_data = np.zeros((256,256),dtype=np.uint8)+255
-
     for group_idx in unique_stroke_group:
         stroke_svg_name = svg_name+'_'+str(group_idx)+'.svg'
         stroke_png_name = svg_name+'_'+str(group_idx)+'.png'
@@ -69,45 +68,46 @@ def draw_sketch_with_strokes(data,svg_name,stroke_group,evaluate_file_path,img_f
         # fg_idx = np.where(stroke_data<25)[0]
         bsd_data[stroke_data<=240] = group_idx+1
         image_data[stroke_data<=240] = 0
-    # cv2.imwrite(img_file_name,image_data)
-    scio.savemat(evaluate_file_path,{'label_matrix':bsd_data})
+    np.savetxt(img_file_name + ".csv", data)
+    cv2.imwrite(img_file_name + ".png",image_data)
+    # scio.savemat(evaluate_file_path,{'label_matrix':bsd_data})
 
 
-test_datasets = ['angel','bulldozer','drill','flower','house']
-# test_datasets = ['airplane','alarm-clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
-#                  'campfire','candle','coffee-cup','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator','angel','bulldozer','drill','flower','house']
-train_strokes = None
-valid_strokes = None
-eval_strokes = None
-testsss_strokes =None
+# test_datasets = ['angel','bulldozer','drill','flower','house']
+# # test_datasets = ['airplane','alarm-clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
+# #                  'campfire','candle','coffee-cup','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator','angel','bulldozer','drill','flower','house']
+# train_strokes = None
+# valid_strokes = None
+# eval_strokes = None
+# testsss_strokes =None
 
 
-for dataset in test_datasets:
-    with open(test_data_dir + dataset + '.ndjson', 'r') as f:
-        ori_data = json.load(f)
-        train_stroke = ori_data['train_data'][:650]
-        valid_stroke = ori_data['train_data'][650:700]
-        eval_stroke = ori_data['train_data'][700:]
-        category = dataset
+# for dataset in test_datasets:
+#     with open(test_data_dir + dataset + '.ndjson', 'r') as f:
+#         ori_data = json.load(f)
+#         train_stroke = ori_data['train_data'][:650]
+#         valid_stroke = ori_data['train_data'][650:700]
+#         eval_stroke = ori_data['train_data'][700:]
+#         category = dataset
 
 
 
-        for idx,stroke in enumerate(eval_stroke):
+#         for idx,stroke in enumerate(eval_stroke):
 
-            if os.path.exists(out_put_file + category) == False:
-                os.mkdir(out_put_file + category)
-                os.mkdir(GT_file+'new_image/'+category)
-            test_file_name = '/import/vision-datasets/kl303/PycharmProjects/BSR/bench/PG_data/test_file/' + category + '.txt'
-            test_f = open(test_file_name, 'r')
-            lines = test_f.readlines()
-            line = lines[np.mod(idx, 100)].strip()
-            mat_file_name = out_put_file + category + '/' + line[:-4] + '.mat'
-            img_file_name = GT_file+'new_image/'+category+ '/' + line[:-4] + '.png'
-            test_f.close()
+#             if os.path.exists(out_put_file + category) == False:
+#                 os.mkdir(out_put_file + category)
+#                 os.mkdir(GT_file+'new_image/'+category)
+#             test_file_name = '/import/vision-datasets/kl303/PycharmProjects/BSR/bench/PG_data/test_file/' + category + '.txt'
+#             test_f = open(test_file_name, 'r')
+#             lines = test_f.readlines()
+#             line = lines[np.mod(idx, 100)].strip()
+#             mat_file_name = out_put_file + category + '/' + line[:-4] + '.mat'
+#             img_file_name = GT_file+'new_image/'+category+ '/' + line[:-4] + '.png'
+#             test_f.close()
 
-            svg_name = svg_file_dir+str(idx)
-            stroke_group = np.asarray(stroke)[:,3]
-            draw_sketch_with_strokes(stroke,svg_name,stroke_group.astype(int),mat_file_name,img_file_name)
+#             svg_name = svg_file_dir+str(idx)
+#             stroke_group = np.asarray(stroke)[:,3]
+#             draw_sketch_with_strokes(stroke,svg_name,stroke_group.astype(int),mat_file_name,img_file_name)
     # if train_strokes is None:
     #     train_strokes = train_stroke
     # else:

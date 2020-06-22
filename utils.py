@@ -15,7 +15,7 @@
 
 import random
 import numpy as np
-
+from ECCV_JULE.group2png import draw_sketch_with_strokes
 
 def get_bounds(data, factor=10):
   """Return bounds of data."""
@@ -440,7 +440,7 @@ class DataLoader(object):
 
           batch_triplets[ii,:,:]=self.get_triplets(temp_str_label,batch[i][:,3])
           new_seq_len[ii] = seq_len[i]
-          saliency[ii, :, :] = get_saliency(batch[i][:, 0:1], max_len)
+          saliency[ii, :, :] = get_saliency(batch[i][:, 0:3], max_len)
           ii +=1
       else:
         # labels: (100, 300, 300)
@@ -495,6 +495,8 @@ class DataLoader(object):
     return result, labels, gap_seg_labels, saliency # ,pad_stroke_nums
 
 
-def get_saliency(batch_strokes, max_len):
+def get_saliency(batch_strokes, max_len, draw_stroke=False):
+  if draw_stroke:
+    draw_sketch_with_strokes(batch_strokes, '', "", "", img_file_name=str(max_len))
   saliency = np.random.uniform(size=(max_len, max_len))
   return saliency

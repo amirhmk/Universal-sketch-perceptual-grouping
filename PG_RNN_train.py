@@ -97,6 +97,188 @@ def download_pretrained_models(
   tf.logging.info('Unzipping complete.')
 
 
+def tf_2d_normal(x1, x2, mu1, mu2, s1, s2, rho):
+    """Returns result of eq # 24 of http://arxiv.org/abs/1308.0850."""
+    norm1 = tf.subtract(x1, mu1)
+    norm2 = tf.subtract(x2, mu2)
+    s1s2 = tf.multiply(s1, s2)
+    # eq 25
+    z = (tf.square(tf.div(norm1, s1)) + tf.square(tf.div(norm2, s2)) -
+            2 * tf.div(tf.multiply(rho, tf.multiply(norm1, norm2)), s1s2))
+    neg_rho = 1 - tf.square(rho)
+    result = tf.exp(tf.div(-z, 2 * neg_rho))
+    denom = 2 * np.pi * tf.multiply(s1s2, tf.sqrt(neg_rho))
+    result = tf.div(result, denom)
+    return result
+
+def get_lossfunc(z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr,
+                    z_pen_logits, x1_data, x2_data, pen_data, hps):
+    """Returns a loss fn based on eq #26 of http://arxiv.org/abs/1308.0850."""
+    # This represents the L_R only (i.e. does not include the KL loss term).
+
+    result0 = tf_2d_normal(x1_data, x2_data, z_mu1, z_mu2, z_sigma1, z_sigma2,
+                            z_corr)
+    epsilon = 1e-6
+    # result1 is the loss wrt pen offset (L_s in equation 9 of
+    # https://arxiv.org/pdf/1704.03477.pdf)
+    result1 = tf.multiply(result0, z_pi)
+    result1 = tf.reduce_sum(result1, 1, keep_dims=True)
+    result1 = -tf.log(result1 + epsilon)  # avoid log(0)
+
+    fs = 1.0 - pen_data[:, 2]  # use training data for this
+    fs = tf.reshape(fs, [-1, 1])
+    # Zero out loss terms beyond N_s, the last actual stroke
+    result1 = tf.multiply(result1, fs)
+
+    # result2: loss wrt pen state, (L_p in equation 9)
+    result2 = tf.nn.softmax_cross_entropy_with_logits(
+        labels=pen_data, logits=z_pen_logits)
+    result2 = tf.reshape(result2, [-1, 1])
+    if not hps.is_training:  # eval mode, mask eos columns
+        result2 = tf.multiply(result2, fs)
+
+    result = result1 + result2
+    return result
+
+    # below is where we need to do MDN (Mixture Density Network) splitting of
+    # distribution params
+def get_mixture_coef(output):
+    """Returns the tf slices containing mdn dist params."""
+    # This uses eqns 18 -> 23 of http://arxiv.org/abs/1308.0850.
+    z = output
+    z_pen_logits = z[:, 0:3]  # pen states
+    z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr = tf.split(z[:, 3:], 6, 1)
+
+    # process output z's into MDN paramters
+
+    # softmax all the pi's and pen states:
+    z_pi = tf.nn.softmax(z_pi)
+    z_pen = tf.nn.softmax(z_pen_logits)
+
+    # exponentiate the sigmas and also make corr between -1 and 1.
+    z_sigma1 = tf.exp(z_sigma1)
+    z_sigma2 = tf.exp(z_sigma2)
+    z_corr = tf.tanh(z_corr)
+
+    r = [z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr, z_pen, z_pen_logits]
+    return r
+
+
+def pre_label_com_loss(hps, sequence_lengths, output, ground_labels, str_labels, batch_triplets):
+    batch_size = hps.batch_size
+    # loss = 0
+    accuracy = 0
+    # max_seq_len = 300
+    output = tf.reshape(output, [batch_size, hps.max_seq_len, -1])
+     # Output shape after:  (100, 300, 128)
+    output_shape = output.shape
+
+    soft_pre_labels = []
+    with tf.variable_scope('logic'):
+        logic_w = tf.get_variable(
+            'logic_w', [output_shape[2], 2])  # (128, 2)
+        logic_b = tf.get_variable('logic_b', [2])  # (128,)
+        # str_labels shape (100, 300, 300)
+        # tf.unstack:
+        # Unpacks the given dimension of a rank-R tensor into rank-(R-1) tensors.
+        for idx, seq_len in enumerate(tf.unstack(sequence_lengths)):
+            # str_label is the label state. 0 Means start, 1 means drawing
+            c_str_label = tf.cast(tf.squeeze(tf.slice(
+                str_labels, begin=[idx, 0, 0], size=[1, seq_len, seq_len])), tf.float32)
+            # print("fuck u tf", c_str_label, seq_len)
+            reshape_str_label = tf.reshape(c_str_label, [-1])
+            # Flatten the stroke label
+            # tf.tile: Constructs a tensor by tiling a given tensor. This will copy across columns
+            tile_str_label = tf.tile(
+                tf.expand_dims(reshape_str_label, 1), [1, 2])
+            # tile_str_label shape (?, 2)
+
+            # output_shape[2]: 128
+            # Output shape after:  (100, 300, 128)
+            # tf.slice:
+            # This operation extracts a slice of size size from a tensor input_ starting at the location specified by begin
+            # This is the f_vec from t=0 to t=300/seq_len (if lower)
+            feats = tf.squeeze(tf.slice(output, begin=[idx, 0, 0], size=[
+                               1, seq_len, output_shape[2]]))
+            # This is unknown as well..., but I think it would be [1, 300, 128], so just one batch of all sequences
+            # c = i
+            # r = j
+            c_feats = tf.expand_dims(feats, 1)
+            r_feats = tf.expand_dims(feats, 0)
+            c_tile = tf.tile(c_feats, [1, seq_len, 1])
+            r_tile = tf.tile(r_feats, [seq_len, 1, 1])
+            delta_feats = tf.abs(c_tile-r_tile)
+            # delta_feats += saliency_difference()
+            # Feature Difference Matrix D
+            reshape_d_f_matrix = tf.reshape(delta_feats, [-1, output_shape[2]])
+            # reshape_d_f_matrix shape (?, 128)
+
+            c_ground_labels = tf.cast(tf.squeeze(tf.slice(ground_labels, begin=[idx, 0, 0], size=[1, seq_len, seq_len])), tf.float32)
+            reshape_c_g_l = tf.reshape(c_ground_labels, [-1])
+            # This basically takes the ground_truth values and assignms them to all the different classes, as there is multi
+            reshape_c_g_l = tf.multiply(reshape_c_g_l, reshape_str_label)
+
+            # logic_w shape (128, 2)
+            # logic_b shape (2,)
+            logic_wxb = tf.nn.xw_plus_b(reshape_d_f_matrix, logic_w, logic_b)
+            # 0 out any stroke that is not in "Drawing" mode
+            logic_wxb = tf.multiply(logic_wxb, tile_str_label)
+            # Local Grouping Loss: sketch_loss
+            # Find out how logic_wxb -> G^HAT
+            # reshape_c_g_l is flattened
+            # Logits: Unscaled log probabilities of shape [d_0, d_1, ...,, num_classes]
+            # Labels: Tensor of shape [d_0, d_1, ..., d_{r-1}]. Each entry in labels must be an index in [0, num_classes)
+            soft_max_logic = tf.nn.softmax(logic_wxb)
+            # sketch_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(reshape_c_g_l,dtype=tf.int32), logits=logic_wxb)
+            sketch_loss = tf.keras.losses.sparse_categorical_crossentropy(
+                tf.cast(reshape_c_g_l, dtype=tf.int32), soft_max_logic)
+
+            # tf.cast(reshape_c_g_l,dtype=tf.int32), soft_max_logic)
+            # sketch_loss shape will be the same as labels (Each stroke will have a label)
+            # saliency_loss =
+            # input seqs,logic_wx output: saliency_loss
+            # sketch_loss += saliency_loss
+
+            reshape_soft_max_logic = tf.reshape(
+                soft_max_logic, [seq_len, seq_len, 2])
+            soft_pre_label = tf.squeeze(tf.slice(reshape_soft_max_logic, begin=[
+                                        0, 0, 1], size=[seq_len, seq_len, 1]))
+            soft_pre_label = tf.multiply(soft_pre_label, c_str_label)
+            pre_label = tf.argmax(soft_max_logic, 1)
+
+            correct_label = tf.equal(
+                tf.cast(pre_label, dtype=tf.int32), tf.cast(reshape_c_g_l, dtype=tf.int32))
+            #tf.reduce_sum:
+            # Flattened sum
+            accuracy += tf.div(tf.reduce_sum(tf.cast(correct_label, dtype=tf.float32)),
+                               tf.cast(seq_len*seq_len, dtype=tf.float32))
+
+            # This may be G!! group_matrix
+            soft_pre_labels.append([soft_pre_label])
+
+            # Triplet Loss
+            anc_idx = tf.squeeze(tf.slice(batch_triplets, begin=[
+                                 idx, 0, 0], size=[1, 1, 3000]))
+            pos_idx = tf.squeeze(tf.slice(batch_triplets, begin=[
+                                 idx, 1, 0], size=[1, 1, 3000]))
+            neg_idx = tf.squeeze(tf.slice(batch_triplets, begin=[
+                                 idx, 2, 0], size=[1, 1, 3000]))
+            anc = tf.gather(soft_pre_label, anc_idx)
+            pos = tf.gather(soft_pre_label, pos_idx)
+            neg = tf.gather(soft_pre_label, neg_idx)
+            d_pos = tf.reduce_sum(tf.square(anc - pos), -1)
+            d_neg = tf.reduce_sum(tf.square(anc - neg), -1)
+            triplet_loss = tf.maximum(0., d_pos - d_neg+2.5)
+            #triplet_loss = d_pos - d_neg
+            if idx == 0:
+                sketch_cost = sketch_loss
+                triplet_cost = triplet_loss
+            else:
+                sketch_cost = tf.concat([sketch_cost, sketch_loss], 0)
+                triplet_cost = tf.concat([triplet_cost, triplet_loss], 0)
+            # ,tf.cast(test_loss,dtype=tf.float32)
+            return sketch_cost, triplet_cost, accuracy/batch_size, soft_pre_labels
+
 
 def load_dataset(data_dir, model_params, inference_mode=False):
   # aug_data_dir ='/import/vision-datasets/kl303/PG_data/svg_fine_tuning/Aug_data/'
@@ -268,7 +450,20 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
 
   hps = model.hps
   start = time.time()
+  
+  sketch_loss,triplets_loss, accuracy, out_pre_labels = pre_label_com_loss(hps, model.sequence_lengths,model.feat_out,model.labels, model.str_labels,model.triplets)
+  g_loss = tf.reduce_mean(sketch_loss)
+  t_cost = tf.reduce_mean(triplets_loss)
 
+
+  r_weight = tf.Variable(hps.kl_weight, trainable=False)
+  lossfunc = get_lossfunc(model.pi, model.mu1, model.mu2, model.sigma1, model.sigma2,
+                          model.corr, model.pen_logits, model.x1_data, model.x2_data, model.pen_data, hps)
+  r_cost = tf.reduce_mean(lossfunc)
+  cost = g_loss+r_cost*r_weight+t_cost*0.6+model.kl_cost*0.02
+  optimizer = tf.train.AdamOptimizer()
+  train_op = optimizer.minimize(cost)
+  sess.run(tf.global_variables_initializer())
   for _ in range(hps.num_steps):
 
     step = sess.run(model.global_step)
@@ -279,10 +474,27 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
                       (hps.kl_decay_rate)**(step/3))
 
     _, x,labels,seg_labels, s,triplet_label, saliency = train_set.random_batch()
+  
+#   lr = tf.Variable(hps.learning_rate, trainable=False)
+
+
+    train_op = optimizer.minimize(cost)
+    # gvs = optimizer.compute_gradients(cost)
+    # print("cost", gvs)
+    # g = hps.grad_clip
+    # for grad, var in gvs:
+    #     print("welll", grad, var)
+    #     tf.clip_by_value(grad, -g, g)
+    #     print("guess didn't come here")
+    #     # capped_gvs = [(tf.clip_by_value(grad, -g, g), var) for grad, var in gvs]
+
+    # print("got here")
+    # train_op = optimizer.apply_gradients(
+    #     capped_gvs, global_step=model.global_step, name='train_step')
     feed = {
         model.input_data: x,
         model.sequence_lengths: s,
-        model.lr: curr_learning_rate,
+        # model.lr: curr_learning_rate,
         model.labels:labels,
         model.str_labels:seg_labels,
         model.triplets:triplet_label,
@@ -290,12 +502,16 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
     }
         
     (triplet_loss,g_cost,train_accuracy, _, pre_labels,train_step, _) = sess.run([
-        model.triplets_loss,model.g_cost,model.accuracy,model.final_state,model.out_pre_labels,
-        model.global_step, model.train_op], feed)
+        t_cost, g_loss, accuracy, model.final_state, out_pre_labels, model.global_step, train_op], feed)
     (triplet_loss,g_cost,train_accuracy, _, pre_labels,train_step, _) = sess.run([
-        model.triplets_loss,model.g_cost,model.accuracy,model.final_state,model.out_pre_labels,
-        model.global_step, model.train_op], feed)
-    print("G_HAT", pre_labels, pre_labels.shape)
+        t_cost, g_loss, accuracy, model.final_state, out_pre_labels, model.global_step, train_op], feed)
+    # (_, total_loss, g_cost) = sess.run([train_op, cost, g_cost], feed)
+    # print(g_loss)
+    # print("fuck yeah buddy", pre_labels[0][0])
+    # print("triplet_loss", triplet_loss)
+    # print("g_cost", g_cost)
+    # print("train_accuracy", train_accuracy)
+    # print("train_step", train_step)
     if step % 10 == 0 and step > 0:
     #if step % 1 == 0 and step > 0:
       end = time.time()
@@ -420,7 +636,6 @@ def trainer(model_params,sess):
   model = sketch_rnn_model.Model(model_params)
   eval_model = sketch_rnn_model.Model(eval_model_params, reuse=True)
   
-  sess.run(tf.global_variables_initializer())
   saver = tf.train.Saver(tf.global_variables())
   if FLAGS.resume_training:
     init_op = load_checkpoint(FLAGS.log_root,[])

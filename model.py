@@ -278,51 +278,51 @@ class Model(object):
     self.final_state = last_state
 
     # NB: the below are inner functions, not methods of Model
-    def tf_2d_normal(x1, x2, mu1, mu2, s1, s2, rho):
-        """Returns result of eq # 24 of http://arxiv.org/abs/1308.0850."""
-        norm1 = tf.subtract(x1, mu1)
-        norm2 = tf.subtract(x2, mu2)
-        s1s2 = tf.multiply(s1, s2)
-        # eq 25
-        z = (tf.square(tf.div(norm1, s1)) + tf.square(tf.div(norm2, s2)) -
-             2 * tf.div(tf.multiply(rho, tf.multiply(norm1, norm2)), s1s2))
-        neg_rho = 1 - tf.square(rho)
-        result = tf.exp(tf.div(-z, 2 * neg_rho))
-        denom = 2 * np.pi * tf.multiply(s1s2, tf.sqrt(neg_rho))
-        result = tf.div(result, denom)
-        return result
+    # def tf_2d_normal(x1, x2, mu1, mu2, s1, s2, rho):
+    #     """Returns result of eq # 24 of http://arxiv.org/abs/1308.0850."""
+    #     norm1 = tf.subtract(x1, mu1)
+    #     norm2 = tf.subtract(x2, mu2)
+    #     s1s2 = tf.multiply(s1, s2)
+    #     # eq 25
+    #     z = (tf.square(tf.div(norm1, s1)) + tf.square(tf.div(norm2, s2)) -
+    #          2 * tf.div(tf.multiply(rho, tf.multiply(norm1, norm2)), s1s2))
+    #     neg_rho = 1 - tf.square(rho)
+    #     result = tf.exp(tf.div(-z, 2 * neg_rho))
+    #     denom = 2 * np.pi * tf.multiply(s1s2, tf.sqrt(neg_rho))
+    #     result = tf.div(result, denom)
+    #     return result
 
-    def get_lossfunc(z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr,
-                     z_pen_logits, x1_data, x2_data, pen_data):
-        """Returns a loss fn based on eq #26 of http://arxiv.org/abs/1308.0850."""
-        # This represents the L_R only (i.e. does not include the KL loss term).
+    # def get_lossfunc(z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr,
+    #                  z_pen_logits, x1_data, x2_data, pen_data):
+    #     """Returns a loss fn based on eq #26 of http://arxiv.org/abs/1308.0850."""
+    #     # This represents the L_R only (i.e. does not include the KL loss term).
 
-        result0 = tf_2d_normal(x1_data, x2_data, z_mu1, z_mu2, z_sigma1, z_sigma2,
-                               z_corr)
-        epsilon = 1e-6
-        # result1 is the loss wrt pen offset (L_s in equation 9 of
-        # https://arxiv.org/pdf/1704.03477.pdf)
-        result1 = tf.multiply(result0, z_pi)
-        result1 = tf.reduce_sum(result1, 1, keep_dims=True)
-        result1 = -tf.log(result1 + epsilon)  # avoid log(0)
+    #     result0 = tf_2d_normal(x1_data, x2_data, z_mu1, z_mu2, z_sigma1, z_sigma2,
+    #                            z_corr)
+    #     epsilon = 1e-6
+    #     # result1 is the loss wrt pen offset (L_s in equation 9 of
+    #     # https://arxiv.org/pdf/1704.03477.pdf)
+    #     result1 = tf.multiply(result0, z_pi)
+    #     result1 = tf.reduce_sum(result1, 1, keep_dims=True)
+    #     result1 = -tf.log(result1 + epsilon)  # avoid log(0)
 
-        fs = 1.0 - pen_data[:, 2]  # use training data for this
-        fs = tf.reshape(fs, [-1, 1])
-        # Zero out loss terms beyond N_s, the last actual stroke
-        result1 = tf.multiply(result1, fs)
+    #     fs = 1.0 - pen_data[:, 2]  # use training data for this
+    #     fs = tf.reshape(fs, [-1, 1])
+    #     # Zero out loss terms beyond N_s, the last actual stroke
+    #     result1 = tf.multiply(result1, fs)
 
-        # result2: loss wrt pen state, (L_p in equation 9)
-        result2 = tf.nn.softmax_cross_entropy_with_logits(
-            labels=pen_data, logits=z_pen_logits)
-        result2 = tf.reshape(result2, [-1, 1])
-        if not self.hps.is_training:  # eval mode, mask eos columns
-            result2 = tf.multiply(result2, fs)
+    #     # result2: loss wrt pen state, (L_p in equation 9)
+    #     result2 = tf.nn.softmax_cross_entropy_with_logits(
+    #         labels=pen_data, logits=z_pen_logits)
+    #     result2 = tf.reshape(result2, [-1, 1])
+    #     if not self.hps.is_training:  # eval mode, mask eos columns
+    #         result2 = tf.multiply(result2, fs)
 
-        result = result1 + result2
-        return result
+    #     result = result1 + result2
+    #     return result
 
-    # below is where we need to do MDN (Mixture Density Network) splitting of
-    # distribution params
+    # # below is where we need to do MDN (Mixture Density Network) splitting of
+    # # distribution params
     def get_mixture_coef(output):
         """Returns the tf slices containing mdn dist params."""
         # This uses eqns 18 -> 23 of http://arxiv.org/abs/1308.0850.
@@ -462,32 +462,39 @@ class Model(object):
     # reshape target data so that it is compatible with prediction shape
     target = tf.reshape(self.output_x, [-1, 5])
     [x1_data, x2_data, eos_data, eoc_data, cont_data] = tf.split(target, 5, 1)
-    pen_data = tf.concat([eos_data, eoc_data, cont_data], 1)
+    self.x1_data = x1_data
+    self.x2_data = x2_data
+    self.pen_data = tf.concat([eos_data, eoc_data, cont_data], 1)
+    self.feat_out = feat_out
 
+  
+def __call__(self, hps):
+    return self.o_pi, self.o_mu1, self.o_mu2, self.o_sigma1, self.o_sigma2, self.o_corr, self.o_pen_logits, self.x1_data, self.x2_data, self.pen_data, self.feat_out
     # Reconstrunction loss
-    lossfunc = get_lossfunc(o_pi, o_mu1, o_mu2, o_sigma1, o_sigma2, o_corr,
-                            o_pen_logits, x1_data, x2_data, pen_data)
+    # lossfunc = get_lossfunc(o_pi, o_mu1, o_mu2, o_sigma1, o_sigma2, o_corr,
+    #                         o_pen_logits, x1_data, x2_data, pen_data)
 
-    self.r_cost = tf.reduce_mean(lossfunc)
+    # self.r_cost = tf.reduce_mean(lossfunc)
 
-    self.sketch_loss,self.triplets_loss, self.accuracy, self.out_pre_labels = pre_label_com_loss(hps, self.sequence_lengths,feat_out,self.labels, self.str_labels,self.triplets)
+    # self.sketch_loss,self.triplets_loss, self.accuracy, self.out_pre_labels = pre_label_com_loss(hps, self.sequence_lengths,feat_out,self.labels, self.str_labels,self.triplets)
     # self.my_loss,self.accuracy,self.out_pre_labels,test_paramater =pre_label_com_loss(hps,self.sequence_lengths,feat_out,self.labels,self.str_labels)
     # Grouping loss
-    self.g_cost = tf.reduce_mean(self.sketch_loss)
+    # self.g_cost = tf.reduce_mean(self.sketch_loss)
     # Triplet Loss/Global Grouping
-    self.t_cost = tf.reduce_mean(self.triplets_loss)
+    # self.t_cost = tf.reduce_mean(self.triplets_loss)
     # if self.hps.is_training:
-    self.lr = tf.Variable(self.hps.learning_rate, trainable=False)
-    optimizer = tf.train.AdamOptimizer(self.lr)
+    # self.lr = tf.Variable(self.hps.learning_rate, trainable=False)
+    # optimizer = tf.train.AdamOptimizer(self.lr)
 
-    self.r_weight = tf.Variable(self.hps.kl_weight, trainable=False)
-    # Total Loss
-    self.cost = self.g_cost+self.r_cost*self.r_weight+self.t_cost*0.6+self.kl_cost*0.02
+    # self.r_weight = tf.Variable(self.hps.kl_weight, trainable=False)
+    # # Total Loss
+    # # self.cost = self.g_cost+self.r_cost*self.r_weight+self.t_cost*0.6+self.kl_cost*0.02
+    # self.cost = self.r_cost*self.r_weight+self.kl_cost*0.02
 
-    gvs = optimizer.compute_gradients(self.cost)
-    g = self.hps.grad_clip
-    for grad,var in gvs:
-      tf.clip_by_value(grad,-g,g)
-      capped_gvs = [(tf.clip_by_value(grad, -g, g), var) for grad, var in gvs]
-    self.train_op = optimizer.apply_gradients(
-          capped_gvs, global_step=self.global_step, name='train_step')
+    # gvs = optimizer.compute_gradients(self.cost)
+    # g = self.hps.grad_clip
+    # for grad,var in gvs:
+    #   tf.clip_by_value(grad,-g,g)
+    #   capped_gvs = [(tf.clip_by_value(grad, -g, g), var) for grad, var in gvs]
+    # self.train_op = optimizer.apply_gradients(
+    #       capped_gvs, global_step=self.global_step, name='train_step')

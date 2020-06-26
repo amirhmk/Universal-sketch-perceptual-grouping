@@ -26,18 +26,18 @@ import rnn
 def copy_hparams(hparams):
   """Return a copy of an HParams instance."""
   return tf.contrib.training.HParams(**hparams.values())
-  
+
 
 def get_default_hparams():
   """Return default HParams for sketch-rnn."""
   hparams = tf.contrib.training.HParams(
-      # all_data_set = ['airplane','alarm_clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
-      #           'campfire','candle','coffee_up','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator','angel','bulldozer','drill','flower','house'],
-      data_set=['airplane','alarm_clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
-               'campfire','candle','coffee_cup','crab','duck','face','ice_cream','pig','pineapple','suitcase','calculator'], # Our dataset.
+      # all_data_set = ['airplane','alarm-clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
+      #           'campfire','candle','coffee-cup','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator','angel','bulldozer','drill','flower','house'],
+      data_set=['airplane', 'alarm_clock', 'ambulance', 'ant', 'apple', 'backpack', 'basket', 'butterfly', 'cactus',
+                'campfire', 'candle', 'coffee_cup', 'crab', 'duck', 'face', 'ice_cream', 'pig', 'pineapple', 'suitcase', 'calculator'],  # Our dataset.
       #teat_data_set = ['airplane','alarm-clock','ambulance','ant','apple'], # 1
       #teat_data_set = ['backpack','basket','butterfly','cactus','campfire'], #2
-      # teat_data_set = ['candle','coffee_cup','crab','duck','face'], #3
+      # teat_data_set = ['candle','coffee-cup','crab','duck','face'], #3
       # teat_data_set = ['ice-cream','pig','pineapple','suitcase','calculator'], #4
 
       # teat_data_set=['angel','bulldozer','drill','flower','house'],
@@ -90,6 +90,7 @@ class Model(object):
 
   def encoder(self, batch, sequence_lengths):
     """Define the bi-directional encoder module of sketch-rnn."""
+
     unused_outputs, last_states = tf.nn.bidirectional_dynamic_rnn(
         self.enc_cell_fw,
         self.enc_cell_bw,
@@ -195,27 +196,24 @@ class Model(object):
         shape=[self.hps.batch_size, self.hps.max_seq_len + 1, 5])
     self.labels = tf.placeholder(
         dtype=tf.int32,
-        shape=[self.hps.batch_size,self.hps.max_seq_len, self.hps.max_seq_len])
+        shape=[self.hps.batch_size, self.hps.max_seq_len, self.hps.max_seq_len])
     self.str_labels = tf.placeholder(
         dtype=tf.int32,
-        shape=[self.hps.batch_size,self.hps.max_seq_len,self.hps.max_seq_len])
-    self.saliency = tf.placeholder(
-        dtype=tf.float32,
         shape=[self.hps.batch_size, self.hps.max_seq_len, self.hps.max_seq_len])
     self.triplets = tf.placeholder(
         dtype=tf.int32,
-        shape=[self.hps.batch_size,3,3000]
+        shape=[self.hps.batch_size, 3, 3000]
     )
     # The target/expected vectors of strokes
     self.output_x = self.input_data[:, 1:self.hps.max_seq_len + 1, :]
-    self.input_x = self.input_data[:, 1:self.hps.max_seq_len + 1, :]
+    self.input_x = self.input_data[:, 1:self.hps.max_seq_len+1, :]
 
     # either do vae-bit and get z, or do unconditional, decoder-only
     if hps.conditional:  # vae mode:
       self.mean, self.presig = self.encoder(self.output_x,
                                             self.sequence_lengths)
       self.sigma = tf.exp(self.presig / 2.0)  # sigma > 0. div 2.0 -> sqrt.
-      
+
       eps = tf.random_normal(
           (self.hps.batch_size, self.hps.z_size), 0.0, 1.0, dtype=tf.float32)
 
@@ -251,9 +249,9 @@ class Model(object):
     n_out = (3 + self.num_mixture * 6)
     feat_out_size = 128
 
-
     with tf.variable_scope('Feat'):
-      feat_w = tf.get_variable('feat_w', [self.hps.dec_rnn_size, feat_out_size])
+      feat_w = tf.get_variable(
+          'feat_w', [self.hps.dec_rnn_size, feat_out_size])
       feat_b = tf.get_variable('feat_b', [feat_out_size])
 
     with tf.variable_scope('RNN'):
@@ -277,58 +275,15 @@ class Model(object):
     feat_out = tf.nn.xw_plus_b(output_reshape, feat_w, feat_b)
     self.final_state = last_state
 
-    # NB: the below are inner functions, not methods of Model
-    # def tf_2d_normal(x1, x2, mu1, mu2, s1, s2, rho):
-    #     """Returns result of eq # 24 of http://arxiv.org/abs/1308.0850."""
-    #     norm1 = tf.subtract(x1, mu1)
-    #     norm2 = tf.subtract(x2, mu2)
-    #     s1s2 = tf.multiply(s1, s2)
-    #     # eq 25
-    #     z = (tf.square(tf.div(norm1, s1)) + tf.square(tf.div(norm2, s2)) -
-    #          2 * tf.div(tf.multiply(rho, tf.multiply(norm1, norm2)), s1s2))
-    #     neg_rho = 1 - tf.square(rho)
-    #     result = tf.exp(tf.div(-z, 2 * neg_rho))
-    #     denom = 2 * np.pi * tf.multiply(s1s2, tf.sqrt(neg_rho))
-    #     result = tf.div(result, denom)
-    #     return result
-
-    # def get_lossfunc(z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr,
-    #                  z_pen_logits, x1_data, x2_data, pen_data):
-    #     """Returns a loss fn based on eq #26 of http://arxiv.org/abs/1308.0850."""
-    #     # This represents the L_R only (i.e. does not include the KL loss term).
-
-    #     result0 = tf_2d_normal(x1_data, x2_data, z_mu1, z_mu2, z_sigma1, z_sigma2,
-    #                            z_corr)
-    #     epsilon = 1e-6
-    #     # result1 is the loss wrt pen offset (L_s in equation 9 of
-    #     # https://arxiv.org/pdf/1704.03477.pdf)
-    #     result1 = tf.multiply(result0, z_pi)
-    #     result1 = tf.reduce_sum(result1, 1, keep_dims=True)
-    #     result1 = -tf.log(result1 + epsilon)  # avoid log(0)
-
-    #     fs = 1.0 - pen_data[:, 2]  # use training data for this
-    #     fs = tf.reshape(fs, [-1, 1])
-    #     # Zero out loss terms beyond N_s, the last actual stroke
-    #     result1 = tf.multiply(result1, fs)
-
-    #     # result2: loss wrt pen state, (L_p in equation 9)
-    #     result2 = tf.nn.softmax_cross_entropy_with_logits(
-    #         labels=pen_data, logits=z_pen_logits)
-    #     result2 = tf.reshape(result2, [-1, 1])
-    #     if not self.hps.is_training:  # eval mode, mask eos columns
-    #         result2 = tf.multiply(result2, fs)
-
-    #     result = result1 + result2
-    #     return result
-
-    # # below is where we need to do MDN (Mixture Density Network) splitting of
-    # # distribution params
+    # below is where we need to do MDN (Mixture Density Network) splitting of
+    # distribution params
     def get_mixture_coef(output):
         """Returns the tf slices containing mdn dist params."""
         # This uses eqns 18 -> 23 of http://arxiv.org/abs/1308.0850.
         z = output
         z_pen_logits = z[:, 0:3]  # pen states
-        z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr = tf.split(z[:, 3:], 6, 1)
+        z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr = tf.split(
+            z[:, 3:], 6, 1)
 
         # process output z's into MDN paramters
 
@@ -341,110 +296,9 @@ class Model(object):
         z_sigma2 = tf.exp(z_sigma2)
         z_corr = tf.tanh(z_corr)
 
-        r = [z_pi, z_mu1, z_mu2, z_sigma1, z_sigma2, z_corr, z_pen, z_pen_logits]
+        r = [z_pi, z_mu1, z_mu2, z_sigma1,
+             z_sigma2, z_corr, z_pen, z_pen_logits]
         return r
-
-    # output: pred  
-    def pre_label_com_loss(hps,sequence_lengths,output,ground_labels,str_labels,batch_triplets):
-        batch_size = hps.batch_size
-        # loss = 0
-        accuracy =0
-        # max_seq_len = 300
-        output = tf.reshape(output,[batch_size,hps.max_seq_len,-1])
-        # Output shape after:  (100, 300, 128)
-        output_shape = output.shape
-
-        soft_pre_labels =[]
-        with tf.variable_scope('logic'):
-            logic_w = tf.get_variable('logic_w', [output_shape[2], 2]) # (128, 2)
-            logic_b = tf.get_variable('logic_b', [2]) # (128,)
-        # str_labels shape (100, 300, 300)
-        # tf.unstack:
-        # Unpacks the given dimension of a rank-R tensor into rank-(R-1) tensors.
-        for idx,seq_len in enumerate(tf.unstack(sequence_lengths)):
-            # str_label is the label state. 0 Means start, 1 means drawing
-            c_str_label = tf.cast(tf.squeeze(tf.slice(str_labels, begin=[idx, 0, 0], size=[1, seq_len, seq_len])), tf.float32)
-            reshape_str_label = tf.reshape(c_str_label,[-1])
-            # Flatten the stroke label
-            # tf.tile: Constructs a tensor by tiling a given tensor. This will copy across columns
-            tile_str_label = tf.tile(tf.expand_dims(reshape_str_label,1),[1,2])
-            # tile_str_label shape (?, 2)
-
-            # output_shape[2]: 128
-            # Output shape after:  (100, 300, 128)
-            # tf.slice:
-            # This operation extracts a slice of size size from a tensor input_ starting at the location specified by begin
-            # This is the f_vec from t=0 to t=300/seq_len (if lower)
-            feats = tf.squeeze(tf.slice(output, begin=[idx, 0, 0], size=[1, seq_len, output_shape[2]]))
-            # This is unknown as well..., but I think it would be [1, 300, 128], so just one batch of all sequences
-            # c = i
-            # r = j
-            c_feats = tf.expand_dims(feats,1)
-            r_feats = tf.expand_dims(feats,0)
-            c_tile = tf.tile(c_feats,[1,seq_len,1])
-            r_tile = tf.tile(r_feats,[seq_len,1,1])
-            delta_feats = tf.abs(c_tile-r_tile)
-            # delta_feats += saliency_difference()
-            # Feature Difference Matrix D
-            reshape_d_f_matrix = tf.reshape(delta_feats,[-1,output_shape[2]])
-            # reshape_d_f_matrix shape (?, 128)
-
-            c_ground_labels = tf.cast(tf.squeeze(tf.slice(ground_labels,begin=[idx,0,0],size=[1,seq_len,seq_len])),tf.float32)
-            reshape_c_g_l = tf.reshape(c_ground_labels,[-1])
-            # This basically takes the ground_truth values and assignms them to all the different classes, as there is multi
-            reshape_c_g_l = tf.multiply(reshape_c_g_l,reshape_str_label)
-
-            # logic_w shape (128, 2)
-            # logic_b shape (2,)
-            logic_wxb = tf.nn.xw_plus_b(reshape_d_f_matrix, logic_w, logic_b)
-            # 0 out any stroke that is not in "Drawing" mode
-            logic_wxb = tf.multiply(logic_wxb,tile_str_label)
-            # Local Grouping Loss: sketch_loss
-            # Find out how logic_wxb -> G^HAT
-            # reshape_c_g_l is flattened
-            # Logits: Unscaled log probabilities of shape [d_0, d_1, ...,, num_classes]
-            # Labels: Tensor of shape [d_0, d_1, ..., d_{r-1}]. Each entry in labels must be an index in [0, num_classes)
-            soft_max_logic = tf.nn.softmax(logic_wxb)
-            # sketch_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(reshape_c_g_l,dtype=tf.int32), logits=logic_wxb)
-            sketch_loss = tf.keras.losses.sparse_categorical_crossentropy(tf.cast(reshape_c_g_l, dtype=tf.int32), soft_max_logic)
-
-            # tf.cast(reshape_c_g_l,dtype=tf.int32), soft_max_logic)
-            # sketch_loss shape will be the same as labels (Each stroke will have a label)
-            # saliency_loss = 
-            # input seqs,logic_wx output: saliency_loss
-            # sketch_loss += saliency_loss
-
-            reshape_soft_max_logic = tf.reshape(soft_max_logic, [seq_len, seq_len, 2])
-            soft_pre_label = tf.squeeze(tf.slice(reshape_soft_max_logic, begin=[0, 0, 1], size=[seq_len, seq_len, 1]))
-            soft_pre_label =tf.multiply(soft_pre_label,c_str_label)
-            pre_label = tf.argmax(soft_max_logic,1)
-
-            correct_label = tf.equal(tf.cast(pre_label,dtype=tf.int32),tf.cast(reshape_c_g_l,dtype=tf.int32))
-            #tf.reduce_sum:
-            # Flattened sum
-            accuracy += tf.div(tf.reduce_sum(tf.cast(correct_label,dtype=tf.float32)),tf.cast(seq_len*seq_len,dtype=tf.float32))
-
-            # This may be G!! group_matrix
-            soft_pre_labels.append([soft_pre_label])
-
-            # Triplet Loss
-            anc_idx = tf.squeeze(tf.slice(batch_triplets,begin=[idx,0,0],size=[1,1,3000]))
-            pos_idx = tf.squeeze(tf.slice(batch_triplets, begin=[idx, 1, 0], size=[1, 1, 3000]))
-            neg_idx = tf.squeeze(tf.slice(batch_triplets, begin=[idx, 2, 0], size=[1, 1, 3000]))
-            anc = tf.gather(soft_pre_label,anc_idx)
-            pos = tf.gather(soft_pre_label,pos_idx)
-            neg = tf.gather(soft_pre_label,neg_idx)
-            d_pos = tf.reduce_sum(tf.square(anc - pos), -1)
-            d_neg = tf.reduce_sum(tf.square(anc - neg), -1)
-            triplet_loss = tf.maximum(0., d_pos - d_neg+2.5)
-            #triplet_loss = d_pos - d_neg
-            if idx==0:
-                sketch_cost = sketch_loss
-                triplet_cost = triplet_loss
-            else:
-                sketch_cost = tf.concat([sketch_cost,sketch_loss],0)
-                triplet_cost = tf.concat([triplet_cost,triplet_loss],0)
-            return sketch_cost,triplet_cost,accuracy/batch_size,soft_pre_labels#,tf.cast(test_loss,dtype=tf.float32)
 
     out = get_mixture_coef(output)
     [o_pi, o_mu1, o_mu2, o_sigma1, o_sigma2, o_corr, o_pen, o_pen_logits] = out
@@ -462,39 +316,8 @@ class Model(object):
     # reshape target data so that it is compatible with prediction shape
     target = tf.reshape(self.output_x, [-1, 5])
     [x1_data, x2_data, eos_data, eoc_data, cont_data] = tf.split(target, 5, 1)
+    self.pen_data = tf.concat([eos_data, eoc_data, cont_data], 1)
     self.x1_data = x1_data
     self.x2_data = x2_data
     self.pen_data = tf.concat([eos_data, eoc_data, cont_data], 1)
     self.feat_out = feat_out
-
-  
-def __call__(self, hps):
-    return self.o_pi, self.o_mu1, self.o_mu2, self.o_sigma1, self.o_sigma2, self.o_corr, self.o_pen_logits, self.x1_data, self.x2_data, self.pen_data, self.feat_out
-    # Reconstrunction loss
-    # lossfunc = get_lossfunc(o_pi, o_mu1, o_mu2, o_sigma1, o_sigma2, o_corr,
-    #                         o_pen_logits, x1_data, x2_data, pen_data)
-
-    # self.r_cost = tf.reduce_mean(lossfunc)
-
-    # self.sketch_loss,self.triplets_loss, self.accuracy, self.out_pre_labels = pre_label_com_loss(hps, self.sequence_lengths,feat_out,self.labels, self.str_labels,self.triplets)
-    # self.my_loss,self.accuracy,self.out_pre_labels,test_paramater =pre_label_com_loss(hps,self.sequence_lengths,feat_out,self.labels,self.str_labels)
-    # Grouping loss
-    # self.g_cost = tf.reduce_mean(self.sketch_loss)
-    # Triplet Loss/Global Grouping
-    # self.t_cost = tf.reduce_mean(self.triplets_loss)
-    # if self.hps.is_training:
-    # self.lr = tf.Variable(self.hps.learning_rate, trainable=False)
-    # optimizer = tf.train.AdamOptimizer(self.lr)
-
-    # self.r_weight = tf.Variable(self.hps.kl_weight, trainable=False)
-    # # Total Loss
-    # # self.cost = self.g_cost+self.r_cost*self.r_weight+self.t_cost*0.6+self.kl_cost*0.02
-    # self.cost = self.r_cost*self.r_weight+self.kl_cost*0.02
-
-    # gvs = optimizer.compute_gradients(self.cost)
-    # g = self.hps.grad_clip
-    # for grad,var in gvs:
-    #   tf.clip_by_value(grad,-g,g)
-    #   capped_gvs = [(tf.clip_by_value(grad, -g, g), var) for grad, var in gvs]
-    # self.train_op = optimizer.apply_gradients(
-    #       capped_gvs, global_step=self.global_step, name='train_step')

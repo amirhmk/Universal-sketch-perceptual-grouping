@@ -258,61 +258,63 @@ class PG_cluster_Rnn():
     p = 0
     iter_cnn = 0
 
-    def __init__(self, dataset, RC=True, updateCNN=True, eta=0.9):
+    def __init__(self, dataset, RC=True, updateCNN=True, eta=0.9, inference_only=False):
 
-        self.sess = tf.InteractiveSession()
+        if not inference_only:
 
-        self.dataset = dataset
+            self.sess = tf.InteractiveSession()
+
+            self.dataset = dataset
+            self.updateCNN = updateCNN
+            self.eta = eta
+            self.tic = timeit.default_timer()
+            np.set_printoptions(precision=8, edgeitems=6, linewidth=200, suppress=True)
+            self.model_params = sketch_rnn_model.get_default_hparams()
+            if FLAGS.hparams:
+                self.model_params.parse(FLAGS.hparams)
+
+            tf.logging.info('sketch-rnn')
+            tf.logging.info('Hyperparams:')
+            for key, val in six.iteritems(self.model_params.values()):
+                tf.logging.info('%s = %s', key, str(val))
+            tf.logging.info('Loading data files.')
+
+            datasets = load_dataset(FLAGS.data_dir, self.model_params)
+
+            self.train_set = datasets[0]
+            self.valid_set = datasets[1]
+            self.test_set = datasets[2]
+            model_params = datasets[3]
+            eval_model_params = datasets[4]
+
+            # self.train_set = datasets[0]
+            # model_params = datasets[1]
+
+            self.model = sketch_rnn_model.Model(model_params)
+            self.eval_model = sketch_rnn_model.Model(eval_model_params, reuse=True)
+
+            tf.gfile.MakeDirs(FLAGS.log_root)
+            with tf.gfile.Open(
+                    os.path.join(FLAGS.log_root, 'model_config.json'), 'w') as f:
+                json.dump(self.model_params.values(), f, indent=True)
+
+            # set up logging to file - see previous section for more details
+            logging.basicConfig(level=logging.DEBUG,
+                                format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+                                datefmt='%m-%d %H:%M',
+                                filename='./logfile/logfile.log',
+                                filemode='w')
+            # define a Handler which writes INFO messages or higher to the sys.stderr
+            console = logging.StreamHandler()
+            console.setLevel(logging.INFO)
+            # set a format which is simpler for console use
+            formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
+            # tell the handler to use this format
+            console.setFormatter(formatter)
+            # add the handler to the root logger
+            logging.getLogger('').addHandler(console)
+            self.logger = logging.getLogger('')
         self.RC = RC
-        self.updateCNN = updateCNN
-        self.eta = eta
-        self.tic = timeit.default_timer()
-        np.set_printoptions(precision=8, edgeitems=6, linewidth=200, suppress=True)
-        self.model_params = sketch_rnn_model.get_default_hparams()
-        if FLAGS.hparams:
-            self.model_params.parse(FLAGS.hparams)
-
-        tf.logging.info('sketch-rnn')
-        tf.logging.info('Hyperparams:')
-        for key, val in six.iteritems(self.model_params.values()):
-            tf.logging.info('%s = %s', key, str(val))
-        tf.logging.info('Loading data files.')
-
-        datasets = load_dataset(FLAGS.data_dir, self.model_params)
-
-        self.train_set = datasets[0]
-        self.valid_set = datasets[1]
-        self.test_set = datasets[2]
-        model_params = datasets[3]
-        eval_model_params = datasets[4]
-
-        # self.train_set = datasets[0]
-        # model_params = datasets[1]
-
-        self.model = sketch_rnn_model.Model(model_params)
-        self.eval_model = sketch_rnn_model.Model(eval_model_params, reuse=True)
-
-        tf.gfile.MakeDirs(FLAGS.log_root)
-        with tf.gfile.Open(
-                os.path.join(FLAGS.log_root, 'model_config.json'), 'w') as f:
-            json.dump(self.model_params.values(), f, indent=True)
-
-        # set up logging to file - see previous section for more details
-        logging.basicConfig(level=logging.DEBUG,
-                            format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
-                            datefmt='%m-%d %H:%M',
-                            filename='./logfile/logfile.log',
-                            filemode='w')
-        # define a Handler which writes INFO messages or higher to the sys.stderr
-        console = logging.StreamHandler()
-        console.setLevel(logging.INFO)
-        # set a format which is simpler for console use
-        formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
-        # tell the handler to use this format
-        console.setFormatter(formatter)
-        # add the handler to the root logger
-        logging.getLogger('').addHandler(console)
-        self.logger = logging.getLogger('')
         self.Ns = 300
 
     def clusters_init(self, indices):

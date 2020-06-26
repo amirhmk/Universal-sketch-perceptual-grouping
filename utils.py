@@ -242,6 +242,7 @@ class DataLoader(object):
       self.strokes.append(raw_data[idx[i]])
     print("total images <= max_seq_len is %d" % count_data)
     self.num_batches = int(count_data / self.batch_size)
+    print("num_batches", self.num_batches, self.batch_size)
 
   def random_sample(self):
     """Return a random sample, in stroke-3 format as used by draw_strokes."""
@@ -294,9 +295,9 @@ class DataLoader(object):
       seq_len.append(length)
 
     # We return three things: stroke-3 format, stroke-5 format, list of seq_len.
-    pad_data,pad_labels,pad_str_labels,new_seq_len,batch_triplets, saliency = self.train_pad_batch(x_batch, self.max_seq_length,seq_len)
+    pad_data,pad_labels,pad_str_labels,new_seq_len,batch_triplets, saliency, grouping_labels = self.train_pad_batch(x_batch, self.max_seq_length,seq_len)
     #seq_len = np.array(seq_len, dtype=int)
-    return x_batch, pad_data,pad_labels,pad_str_labels, new_seq_len,batch_triplets, saliency
+    return x_batch, pad_data, pad_labels, pad_str_labels, new_seq_len, batch_triplets, saliency
 
   def test_get_batch_from_indices(self, indices):
     """Given a list of indices, return the potentially augmented batch."""
@@ -313,9 +314,9 @@ class DataLoader(object):
       seq_len.append(length)
 
     # We return three things: stroke-3 format, stroke-5 format, list of seq_len.
-    pad_data,pad_labels,pad_str_labels, saliency = self.test_pad_batch(x_batch, self.max_seq_length)
+    pad_data,pad_labels,pad_str_labels, saliency, grouping_labels = self.test_pad_batch(x_batch, self.max_seq_length)
     seq_len = np.array(seq_len, dtype=int)
-    return x_batch, pad_data, pad_labels, pad_str_labels, seq_len, saliency
+    return x_batch, pad_data, pad_labels, pad_str_labels, seq_len, saliency, grouping_labels
 
   def random_batch(self):
     """Return a randomised portion of the training data."""
@@ -334,6 +335,7 @@ class DataLoader(object):
   def get_triplets(self,str_label,ori_pad_group_label):
     unique_labels = np.unique(ori_pad_group_label)
     C = []
+    counts = []
     diff_C = []
     anc = []
     pos = []
@@ -346,7 +348,9 @@ class DataLoader(object):
     triplet_nums_C3 = 0
     for unique_label in unique_labels:
       same_group_idx = np.where(pad_group_label==unique_label)[0]
+      # print("triplet shit", pad_group_label.shape), ori_pad_group_label.shape)
       C.append(same_group_idx)
+      counts.append(len(same_group_idx))
       temp_diff_group_idx = np.where(pad_group_label != unique_label)[0]
       diff_group_idx = [ss for ss in temp_diff_group_idx if ss not in gap_index]
       diff_C.append(diff_group_idx)
@@ -388,7 +392,21 @@ class DataLoader(object):
       triplets[0, i] = anc[idx[idx_idx]]
       triplets[1, i] = pos[idx[idx_idx]]
       triplets[2, i] = neg[idx[idx_idx]]
-    return triplets
+    return triplets, C, counts
+
+  def get_grouping_centers_idx(self, group_labels):
+      group_ids = np.unique(group_labels[:, 0])
+      indicies = []
+      counts = []
+      print(group_labels.shape)
+      for group_id in group_ids:
+        group_idx = np.where(group_labels.flatten() == group_id)
+        print("here we go", group_idx, group_id)
+        indicies.append([group_idx])
+        # Number of rows of gr
+        counts.append(len(group_idx))
+      # List of group elements indicies [[1,2,3] -> group_0, [3], [4,5,66,7]...]
+      return indicies, counts
 
   def train_pad_batch(self, batch, max_len,seq_len):
     """Pad the batch to be stroke-5 bigger format as described in paper."""
@@ -400,13 +418,17 @@ class DataLoader(object):
     pad_stroke_nums = []
     batch_triplets = np.zeros((self.batch_size,3,3000),dtype='int32')
     saliency = np.zeros((self.batch_size, max_len, max_len), dtype='float32')
-    ii =0
+    # grouping_labels = np.zeros((self.batch_size, max_len, max_len), dtype='int32')
+    grouping_labels = []
+    ii = 0
     for i in range(len(batch)):
       stroke_labels = batch[i][:, 3]
       temp_str_label = np.ones((max_len, 1), dtype='int32')
       temp_label_matrix = np.zeros((max_len, max_len), dtype='int32')
+      temp_grouping_matrix = np.zeros((max_len, max_len), dtype='int32')
       l = len(batch[i])
       assert l <= max_len
+      total_counts = { label_id: 0 for label_id in np.unique(stroke_labels) }
       for line_indx in range(l):
         if line_indx>0:
           if batch[i][line_indx-1,2]==1:
@@ -415,6 +437,8 @@ class DataLoader(object):
         same_label_index = np.where(stroke_labels==current_label)[0]
         temp_labels = np.zeros((1,max_len),dtype='int32')
         temp_labels[0,same_label_index]=1
+        temp_grouping_matrix[line_indx, :] = current_label
+        total_counts[current_label] += 1
         temp_label_matrix[line_indx,:]=temp_labels
       temp_str_label[0, 0] = 0
 
@@ -438,16 +462,26 @@ class DataLoader(object):
           cluster_num[ii]= len(np.unique(batch[i][:,3]))
           pad_stroke_nums.append(batch[i][:,3])
 
-          batch_triplets[ii,:,:]=self.get_triplets(temp_str_label,batch[i][:,3])
+          triplet, grouping_idx, grouping_counts = self.get_triplets(temp_str_label,batch[i][:,3])
+          batch_triplets[ii, :, :] = triplet
+          # print("triplet", grouping_idx)
+          grouping_labels.append([grouping_idx, grouping_counts])
           new_seq_len[ii] = seq_len[i]
-          saliency[ii, :, :] = get_saliency(batch[i][:, 0:3], max_len)
-          ii +=1
+          saliency[ii, :, :] = get_saliency(batch[i][:, 0:3], labels[ii, :, :], max_len)
+          # print("this is here u know", grouping_idx, grouping_counts)
+          # print("hello there",
+          #       batch_triplets[ii, :, :],  batch_triplets[ii, :, :].shape, batch_triplets.shape)
+          # grouping_labels[ii, :, :] = self.get_grouping_centers_idx(
+              # temp_grouping_matrix, total_counts)
+          # grouping_labels.append(
+              # self.get_grouping_centers_idx(temp_grouping_matrix))
+          ii += 1
       else:
         # labels: (100, 300, 300)
         # gap_seg_labels: (100, 300, 300)
-        return result, labels, gap_seg_labels, new_seq_len,batch_triplets, saliency
+        return result, labels, gap_seg_labels, new_seq_len, batch_triplets, saliency, grouping_labels
 
-
+    
     #return result,labels,gap_seg_labels,new_seq_len
   # def temp_fun(self,C,diff_C,gap_index,neg_in_each_triplet,anc,pos,neg):
 
@@ -457,6 +491,7 @@ class DataLoader(object):
     labels = np.zeros((self.batch_size,max_len, max_len), dtype='int32')
     gap_seg_labels = np.ones((self.batch_size,max_len,max_len),dtype='int32')
     saliency = np.zeros((self.batch_size, max_len, max_len), dtype='float32')
+    grouping_labels = np.zeros((self.batch_size, max_len, max_len), dtype='int32')
     #pad_stroke_nums = []
     assert len(batch) == self.batch_size
     for i in range(self.batch_size):
@@ -476,7 +511,6 @@ class DataLoader(object):
       stroke_labels = batch[i][:, 3]
       temp_sep_label = np.ones((max_len,1),dtype='int32')
       # Saliency 
-      saliency[i, :, :] = get_saliency(batch[i][:, 0:1], max_len)
       for line_indx in range(l):
         if line_indx>0:
           if batch[i][line_indx-1,2]==1:
@@ -489,13 +523,15 @@ class DataLoader(object):
         temp_labels = np.zeros((1,max_len),dtype='int32')
         temp_labels[0,same_label_index]=1
         labels[i,line_indx,:]=temp_labels
+        grouping_labels[i, line_indx:, :] = stroke_labels
+      saliency[i, :, :] = get_saliency(batch[i][:, 0:3], labels[i, :, :], max_len)
       #pad_stroke_nums.append([batch[i][:,3]])
       temp_sep_label[0, 0] = 0
       gap_seg_labels[i,:,:]=np.dot(temp_sep_label,temp_sep_label.T)
     return result, labels, gap_seg_labels, saliency # ,pad_stroke_nums
 
 
-def get_saliency(batch_strokes, max_len, draw_stroke=False):
+def get_saliency(batch_strokes, labels, max_len, draw_stroke=False):
   if draw_stroke:
     draw_sketch_with_strokes(batch_strokes, '', "", "", img_file_name=str(max_len))
   saliency = np.random.uniform(size=(max_len, max_len))

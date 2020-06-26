@@ -6,6 +6,7 @@ import svgwrite
 from cairosvg import svg2png
 import os
 import cv2
+import csv
 
 
 test_data_dir = '/import/vision-datasets001/kl303/PG_data/PG_ndjson/fine_tuning1/'
@@ -23,8 +24,8 @@ def data2abspoints(data):
     next_is_gap = 1
     for line_data in data:
 
-        offset_x = line_data[0]
-        offset_y = line_data[1]
+        offset_x = line_data[0] * 10
+        offset_y = line_data[1] * 10
         if next_is_gap:
             begin_point = [abs_x+offset_x,abs_y+offset_y]
             stroke_group_idx+=1
@@ -44,7 +45,12 @@ def data2abspoints(data):
 def draw_sketch_with_strokes(data, svg_name, stroke_group, evaluate_file_path, img_file_name=None):
 
     # assert len(data)==len(stroke_group)
+    with open(data, 'r') as f:
+        data = list(csv.reader(f, delimiter=" "))
+    data = np.array(data, dtype=np.float)
+
     dims = (256,256)
+    print(data)
     abspoints,stroke_group=data2abspoints(data)
     # abspoints, _ = data2abspoints(data)
     unique_stroke_group = np.unique(stroke_group)
@@ -68,6 +74,7 @@ def draw_sketch_with_strokes(data, svg_name, stroke_group, evaluate_file_path, i
         # fg_idx = np.where(stroke_data<25)[0]
         bsd_data[stroke_data<=240] = group_idx+1
         image_data[stroke_data<=240] = 0
+    print("got to here", img_file_name)
     np.savetxt(img_file_name + ".csv", data)
     cv2.imwrite(img_file_name + ".png",image_data)
     # scio.savemat(evaluate_file_path,{'label_matrix':bsd_data})
@@ -123,3 +130,5 @@ def draw_sketch_with_strokes(data, svg_name, stroke_group, evaluate_file_path, i
 
 
 
+if __name__ == "__main__":
+    draw_sketch_with_strokes("300.csv", '', "", "", img_file_name="face")

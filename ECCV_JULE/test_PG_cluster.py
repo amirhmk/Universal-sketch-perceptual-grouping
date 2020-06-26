@@ -20,225 +20,225 @@ import model as sketch_rnn_model
 import utils
 import svgwrite
 import scipy.io as scio
-import pre_label2BSR
+# import pre_label2BSR
 from copy import deepcopy
 tf.logging.set_verbosity(tf.logging.INFO)
 
-FLAGS = tf.app.flags.FLAGS
+# FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string(
-    'data_dir',
-    'SketchX-PRIS-Dataset/Perceptual_Grouping/',
-    'The directory in which to find the dataset specified in model hparams. '
-    'If data_dir starts with "http://" or "https://", the file will be fetched '
-    'remotely.')
-tf.app.flags.DEFINE_string(
-    'log_root', './models/',
-    'Directory to store model checkpoints, tensorboard.')
-tf.app.flags.DEFINE_boolean(
-    'resume_training', True,
-    'Set to true to load previous checkpoint')
-tf.app.flags.DEFINE_string(
-    'hparams', '',
-    'Pass in comma-separated key=value pairs such as '
-    '\'save_every=40,decay_rate=0.99\' '
-    '(no whitespace) to be read into the HParams object defined in model.py')
+# tf.app.flags.DEFINE_string(
+#     'data_dir',
+#     'SketchX-PRIS-Dataset/Perceptual_Grouping/',
+#     'The directory in which to find the dataset specified in model hparams. '
+#     'If data_dir starts with "http://" or "https://", the file will be fetched '
+#     'remotely.')
+# tf.app.flags.DEFINE_string(
+#     'log_root', './models/',
+#     'Directory to store model checkpoints, tensorboard.')
+# tf.app.flags.DEFINE_boolean(
+#     'resume_training', True,
+#     'Set to true to load previous checkpoint')
+# tf.app.flags.DEFINE_string(
+#     'hparams', '',
+#     'Pass in comma-separated key=value pairs such as '
+#     '\'save_every=40,decay_rate=0.99\' '
+#     '(no whitespace) to be read into the HParams object defined in model.py')
 
-PRETRAINED_MODELS_URL = ('http://download.magenta.tensorflow.org/models/'
-                         'sketch_rnn.zip')
-def draw_strokes(data,group_labels, factor=1, svg_filename = '../sample.svg'):
-    color_data = scio.loadmat('../colors.mat')
-    color = color_data['colors']
-    min_x, max_x, min_y, max_y = utils.get_bounds(data, factor)
-    dims = (50 + max_x - min_x, 50 + max_y - min_y)
-    dwg = svgwrite.Drawing(svg_filename, size=dims)
-    dwg.add(dwg.rect(insert=(0, 0), size=dims,fill='white'))
-    lift_pen = 1
-    abs_x = 25 - min_x
-    abs_y = 25 - min_y
-    p = "M%s,%s " % (abs_x, abs_y)
-    real_stroke_flag = 0
-    command = "m"
-    begin_point = [abs_x,abs_y]
-    end_point = [0,0]
-    for i in xrange(len(data)):
-        group_no = group_labels[i]
-        current_color = color[np.mod(group_no, 10)]
-        if (lift_pen == 1):
-            # if real_stroke_flag:
-            #     dwg.add(dwg.path(p).stroke(the_color, stroke_width).fill("none"))
-            command = "m"
-            x = float(data[i][0]) / factor
-            y = float(data[i][1]) / factor
-            abs_x += x
-            abs_y += y
-            lift_pen = data[i][2]
+# PRETRAINED_MODELS_URL = ('http://download.magenta.tensorflow.org/models/'
+#                          'sketch_rnn.zip')
+# def draw_strokes(data,group_labels, factor=1, svg_filename = '../sample.svg'):
+#     color_data = scio.loadmat('../colors.mat')
+#     color = color_data['colors']
+#     min_x, max_x, min_y, max_y = utils.get_bounds(data, factor)
+#     dims = (50 + max_x - min_x, 50 + max_y - min_y)
+#     dwg = svgwrite.Drawing(svg_filename, size=dims)
+#     dwg.add(dwg.rect(insert=(0, 0), size=dims,fill='white'))
+#     lift_pen = 1
+#     abs_x = 25 - min_x
+#     abs_y = 25 - min_y
+#     p = "M%s,%s " % (abs_x, abs_y)
+#     real_stroke_flag = 0
+#     command = "m"
+#     begin_point = [abs_x,abs_y]
+#     end_point = [0,0]
+#     for i in xrange(len(data)):
+#         group_no = group_labels[i]
+#         current_color = color[np.mod(group_no, 10)]
+#         if (lift_pen == 1):
+#             # if real_stroke_flag:
+#             #     dwg.add(dwg.path(p).stroke(the_color, stroke_width).fill("none"))
+#             command = "m"
+#             x = float(data[i][0]) / factor
+#             y = float(data[i][1]) / factor
+#             abs_x += x
+#             abs_y += y
+#             lift_pen = data[i][2]
 
-            real_stroke_flag = 0
-        elif (command != "l"):
-            command = "l"
-            x = float(data[i][0]) / factor
-            y = float(data[i][1]) / factor
-            begin_point = [abs_x, abs_y]
-            abs_x += x
-            abs_y += y
-            end_point = [abs_x, abs_y]
-            lift_pen = data[i][2]
-            dwg.add(dwg.line((begin_point[0], begin_point[1]), (end_point[0], end_point[1]),
-                             stroke=svgwrite.rgb(current_color[0] * 100, current_color[1] * 100, current_color[2] * 100,
-                                                 '%')))
-            real_stroke_flag = 1
-        else:
-            command = ""
-            x = float(data[i][0]) / factor
-            y = float(data[i][1]) / factor
-            begin_point = [abs_x, abs_y]
-            abs_x += x
-            abs_y += y
-            end_point = [abs_x, abs_y]
-            lift_pen = data[i][2]
-            dwg.add(dwg.line((begin_point[0], begin_point[1]), (end_point[0], end_point[1]),
-                             stroke=svgwrite.rgb(current_color[0] * 100, current_color[1] * 100, current_color[2] * 100,
-                                                 '%')))
-            real_stroke_flag = 1
-    dwg.save()
+#             real_stroke_flag = 0
+#         elif (command != "l"):
+#             command = "l"
+#             x = float(data[i][0]) / factor
+#             y = float(data[i][1]) / factor
+#             begin_point = [abs_x, abs_y]
+#             abs_x += x
+#             abs_y += y
+#             end_point = [abs_x, abs_y]
+#             lift_pen = data[i][2]
+#             dwg.add(dwg.line((begin_point[0], begin_point[1]), (end_point[0], end_point[1]),
+#                              stroke=svgwrite.rgb(current_color[0] * 100, current_color[1] * 100, current_color[2] * 100,
+#                                                  '%')))
+#             real_stroke_flag = 1
+#         else:
+#             command = ""
+#             x = float(data[i][0]) / factor
+#             y = float(data[i][1]) / factor
+#             begin_point = [abs_x, abs_y]
+#             abs_x += x
+#             abs_y += y
+#             end_point = [abs_x, abs_y]
+#             lift_pen = data[i][2]
+#             dwg.add(dwg.line((begin_point[0], begin_point[1]), (end_point[0], end_point[1]),
+#                              stroke=svgwrite.rgb(current_color[0] * 100, current_color[1] * 100, current_color[2] * 100,
+#                                                  '%')))
+#             real_stroke_flag = 1
+#     dwg.save()
 
-def line_label2group_label(line_labels,str_labels_matrix):
-    str_labels = str_labels_matrix[1,:]
-    temp_i =1
-    while np.sum(str_labels)==0:
-        temp_i +=1
-        str_labels= str_labels_matrix[temp_i,:]
-    line_group_label = []
-    gap_idx = np.where(str_labels==0)[0]
-    str_num = len(gap_idx)
-    line_idx = 0
-    for str_idx,str_label in enumerate(str_labels):
-        if str_label==0:
-            line_label = line_labels[line_idx]
-            line_group_label.append(line_label)
-        else:
-            line_label = line_labels[line_idx]
-            line_group_label.append(line_label)
-            line_idx+=1
-    return line_group_label
+# def line_label2group_label(line_labels,str_labels_matrix):
+#     str_labels = str_labels_matrix[1,:]
+#     temp_i =1
+#     while np.sum(str_labels)==0:
+#         temp_i +=1
+#         str_labels= str_labels_matrix[temp_i,:]
+#     line_group_label = []
+#     gap_idx = np.where(str_labels==0)[0]
+#     str_num = len(gap_idx)
+#     line_idx = 0
+#     for str_idx,str_label in enumerate(str_labels):
+#         if str_label==0:
+#             line_label = line_labels[line_idx]
+#             line_group_label.append(line_label)
+#         else:
+#             line_label = line_labels[line_idx]
+#             line_group_label.append(line_label)
+#             line_idx+=1
+#     return line_group_label
 
-def load_dataset(data_dir, model_params, inference_mode=False):
-    #test_data_dir = '/import/vision-datasets001/kl303/PG_data/PG_ndjson/fine_tuning1/'
-    test_data_dir = data_dir
-    # test_data_dir = '../ECCV_Vrandom_noise/random_noise_test_data/'
-    all_datasets = model_params.all_data_set
-    test_datasets = model_params.test_data_set
-    # model_params.data_set = datasets
-    train_strokes = None
-    valid_strokes = None
-    eval_strokes = None
-    testsss_strokes =None
-    # for dataset in all_datasets:
-    #     if dataset in test_datasets:
-    #         continue
+# def load_dataset(data_dir, model_params, inference_mode=False):
+#     #test_data_dir = '/import/vision-datasets001/kl303/PG_data/PG_ndjson/fine_tuning1/'
+#     test_data_dir = data_dir
+#     # test_data_dir = '../ECCV_Vrandom_noise/random_noise_test_data/'
+#     all_datasets = model_params.all_data_set
+#     test_datasets = model_params.test_data_set
+#     # model_params.data_set = datasets
+#     train_strokes = None
+#     valid_strokes = None
+#     eval_strokes = None
+#     testsss_strokes =None
+#     # for dataset in all_datasets:
+#     #     if dataset in test_datasets:
+#     #         continue
 
-    for dataset in test_datasets:
-
-
-        with open(test_data_dir + dataset + '.ndjson', 'r') as f:
-            ori_data = json.load(f)
-            train_stroke = ori_data['train_data'][:650]
-            valid_stroke = ori_data['train_data'][650:700]
-            eval_stroke = ori_data['train_data'][700:]
-        if train_strokes is None:
-            train_strokes = train_stroke
-        else:
-            train_strokes = np.concatenate((train_strokes, train_stroke))
-        if valid_strokes is None:
-           valid_strokes = valid_stroke
-        else:
-           valid_strokes = np.concatenate((valid_strokes, valid_stroke))
-        if eval_strokes is None:
-           eval_strokes = eval_stroke
-        else:
-           eval_strokes = np.concatenate((eval_strokes, eval_stroke))
-
-    all_strokes = np.concatenate((train_strokes, valid_strokes, eval_strokes))
-    # all_strokes = train_strokes
-    num_points = 0
-    for stroke in all_strokes:
-        num_points += len(stroke)
-    max_seq_len = utils.get_max_len(all_strokes)
-
-    model_params.max_seq_len = max_seq_len
-
-    tf.logging.info('model_params.max_seq_len %i.', model_params.max_seq_len)
-
-    eval_model_params = sketch_rnn_model.copy_hparams(model_params)
-
-    eval_model_params.use_input_dropout = 0
-    eval_model_params.use_recurrent_dropout = 0
-    eval_model_params.use_output_dropout = 0
-    eval_model_params.is_training = 1
-
-    if inference_mode:
-       eval_model_params.batch_size = 1
-       eval_model_params.is_training = 0
-
-    sample_model_params = sketch_rnn_model.copy_hparams(eval_model_params)
-    sample_model_params.batch_size = 1  # only sample one at a time
-    sample_model_params.max_seq_len = 1  # sample one point at a time
-
-    train_set = utils.DataLoader(
-        train_strokes,
-        model_params.batch_size,
-        max_seq_length=model_params.max_seq_len,
-        random_scale_factor=model_params.random_scale_factor,
-        augment_stroke_prob=model_params.augment_stroke_prob)
-
-    # normalizing_scale_factor = train_set.calculate_normalizing_scale_factor()
-    normalizing_scale_factor = 12.06541
-    train_set.normalize(normalizing_scale_factor)
-
-    valid_set = utils.DataLoader(
-       valid_strokes,
-       eval_model_params.batch_size,
-       max_seq_length=eval_model_params.max_seq_len,
-       random_scale_factor=0.0,
-       augment_stroke_prob=0.0)
-    valid_set.normalize(normalizing_scale_factor)
-
-    test_set = utils.DataLoader(
-       eval_strokes,
-       eval_model_params.batch_size,
-       max_seq_length=eval_model_params.max_seq_len,
-       random_scale_factor=0.0,
-       augment_stroke_prob=0.0)
-    test_set.normalize(normalizing_scale_factor)
-
-    tf.logging.info('normalizing_scale_factor %4.4f.', normalizing_scale_factor)
-
-    result = [train_set, valid_set, test_set, model_params, eval_model_params, sample_model_params]
-
-    return result
+#     for dataset in test_datasets:
 
 
-def get_init_fn(checkpoint_dir, checkpoint_exclude_scopes):
-    #pdb.set_trace()
-    ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
-    pretrain_model = ckpt.model_checkpoint_path
-    print("load pretrained model from %s" % pretrain_model)
+#         with open(test_data_dir + dataset + '.ndjson', 'r') as f:
+#             ori_data = json.load(f)
+#             train_stroke = ori_data['train_data'][:650]
+#             valid_stroke = ori_data['train_data'][650:700]
+#             eval_stroke = ori_data['train_data'][700:]
+#         if train_strokes is None:
+#             train_strokes = train_stroke
+#         else:
+#             train_strokes = np.concatenate((train_strokes, train_stroke))
+#         if valid_strokes is None:
+#            valid_strokes = valid_stroke
+#         else:
+#            valid_strokes = np.concatenate((valid_strokes, valid_stroke))
+#         if eval_strokes is None:
+#            eval_strokes = eval_stroke
+#         else:
+#            eval_strokes = np.concatenate((eval_strokes, eval_stroke))
 
-    exclusions = [scope.strip() for scope in checkpoint_exclude_scopes]
+#     all_strokes = np.concatenate((train_strokes, valid_strokes, eval_strokes))
+#     # all_strokes = train_strokes
+#     num_points = 0
+#     for stroke in all_strokes:
+#         num_points += len(stroke)
+#     max_seq_len = utils.get_max_len(all_strokes)
 
-    variables_to_restore = []
+#     model_params.max_seq_len = max_seq_len
 
-    for var in tf.trainable_variables():
-        excluded = False
-        for exclusion in exclusions:
-            if var.op.name.startswith(exclusion):
-                excluded = True
-                break
-        if not excluded:
-            print(var.name)
-            variables_to_restore.append(var)
-    return slim.assign_from_checkpoint_fn(pretrain_model,variables_to_restore)
+#     tf.logging.info('model_params.max_seq_len %i.', model_params.max_seq_len)
+
+#     eval_model_params = sketch_rnn_model.copy_hparams(model_params)
+
+#     eval_model_params.use_input_dropout = 0
+#     eval_model_params.use_recurrent_dropout = 0
+#     eval_model_params.use_output_dropout = 0
+#     eval_model_params.is_training = 1
+
+#     if inference_mode:
+#        eval_model_params.batch_size = 1
+#        eval_model_params.is_training = 0
+
+#     sample_model_params = sketch_rnn_model.copy_hparams(eval_model_params)
+#     sample_model_params.batch_size = 1  # only sample one at a time
+#     sample_model_params.max_seq_len = 1  # sample one point at a time
+
+#     train_set = utils.DataLoader(
+#         train_strokes,
+#         model_params.batch_size,
+#         max_seq_length=model_params.max_seq_len,
+#         random_scale_factor=model_params.random_scale_factor,
+#         augment_stroke_prob=model_params.augment_stroke_prob)
+
+#     # normalizing_scale_factor = train_set.calculate_normalizing_scale_factor()
+#     normalizing_scale_factor = 12.06541
+#     train_set.normalize(normalizing_scale_factor)
+
+#     valid_set = utils.DataLoader(
+#        valid_strokes,
+#        eval_model_params.batch_size,
+#        max_seq_length=eval_model_params.max_seq_len,
+#        random_scale_factor=0.0,
+#        augment_stroke_prob=0.0)
+#     valid_set.normalize(normalizing_scale_factor)
+
+#     test_set = utils.DataLoader(
+#        eval_strokes,
+#        eval_model_params.batch_size,
+#        max_seq_length=eval_model_params.max_seq_len,
+#        random_scale_factor=0.0,
+#        augment_stroke_prob=0.0)
+#     test_set.normalize(normalizing_scale_factor)
+
+#     tf.logging.info('normalizing_scale_factor %4.4f.', normalizing_scale_factor)
+
+#     result = [train_set, valid_set, test_set, model_params, eval_model_params, sample_model_params]
+
+#     return result
+
+
+# def get_init_fn(checkpoint_dir, checkpoint_exclude_scopes):
+#     #pdb.set_trace()
+#     ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+#     pretrain_model = ckpt.model_checkpoint_path
+#     print("load pretrained model from %s" % pretrain_model)
+
+#     exclusions = [scope.strip() for scope in checkpoint_exclude_scopes]
+
+#     variables_to_restore = []
+
+#     for var in tf.trainable_variables():
+#         excluded = False
+#         for exclusion in exclusions:
+#             if var.op.name.startswith(exclusion):
+#                 excluded = True
+#                 break
+#         if not excluded:
+#             print(var.name)
+#             variables_to_restore.append(var)
+#     return slim.assign_from_checkpoint_fn(pretrain_model,variables_to_restore)
 
 class PG_cluster_Rnn():
 
@@ -261,7 +261,6 @@ class PG_cluster_Rnn():
     def __init__(self, dataset, RC=True, updateCNN=True, eta=0.9, inference_only=False):
 
         if not inference_only:
-
             self.sess = tf.InteractiveSession()
 
             self.dataset = dataset
@@ -314,6 +313,7 @@ class PG_cluster_Rnn():
             # add the handler to the root logger
             logging.getLogger('').addHandler(console)
             self.logger = logging.getLogger('')
+        self.inference_mode = inference_only
         self.RC = RC
         self.Ns = 300
 
@@ -582,88 +582,57 @@ class PG_cluster_Rnn():
         pre_labels = np.asarray(pre_labels[0][0][0])
         return pre_labels
 
-    def recurrent_process(self,updateCNN,x, labels, str_labels, s,step):
+    def recurrent_process(self, str_labels, s, pre_labels=None, x=None, labels=None):
 
-        self.K = len(np.unique(self.gnd))
-        feed = {
-            self.model.sequence_lengths: s,
-            self.model.input_data: x,
-            self.model.labels: labels,
-            self.model.str_labels: str_labels
-        }
+        if not self.inference_mode:
+            self.K = len(np.unique(self.gnd))
+            feed = {
+                self.model.sequence_lengths: s,
+                self.model.input_data: x,
+                self.model.labels: labels,
+                self.model.str_labels: str_labels
+            }
 
-        group_matrix = self.model.out_pre_labels
-        pre_labels,accuracy = self.sess.run([group_matrix,self.model.accuracy], feed)
+            group_matrix = self.model.out_pre_labels
+            pre_labels,accuracy = self.sess.run([group_matrix,self.model.accuracy], feed)
+        print(pre_labels)
         pre_labels = np.asarray(pre_labels[0][0])
         if len(pre_labels.shape)==1:
             pre_labels = np.reshape(pre_labels,[s[0],s[0]])
         str_label = str_labels[0,:s[0],:s[0]]
 
         real_line_index = np.where(str_label[:, 1] == 1)[0]
+        print("real_line_index", pre_labels.shape)
         real_line_pre_labels = np.take(pre_labels,real_line_index,axis=0)
+        print("real_line_index2222", real_line_pre_labels.shape)
         real_line_pre_labels = np.take(real_line_pre_labels, real_line_index, axis=1)
         self.gnd = np.take(self.gnd,real_line_index)
         self.Ns = len(real_line_pre_labels)
+        # print()
 
 
         if self.Ks>=len(real_line_pre_labels):
             self.Ks=len(real_line_pre_labels)-2
         #pdb.set_trace()
+        print("where is this", len(real_line_pre_labels), self.Ks)
         sortedDis, indexDis = self.get_Dis(real_line_pre_labels, self.Ks)
         group_labels = self.clusters_init(indexDis)
         C = self.get_C(group_labels)
         A, asymA, C = self.get_A(real_line_pre_labels, sortedDis, indexDis, C)
         total_minLoss = {}
         total_C={}
-        # index1, index2, minLoss = self.find_closest_clusters(A)
         minLoss =0
         while self.Nc > 10:
-            # if self.Nc < self.Ks*2 and self.Nc>20:
-            #     self.Ks =self.Nc/2
-            #     sortedDis, indexDis = self.get_Dis(real_line_pre_labels, self.Ks)
-            #     A, asymA, C = self.get_A(real_line_pre_labels, sortedDis, indexDis, C)
             index1, index2,minLoss = self.find_closest_clusters(A)
             A, asymA, C = self.merge_cluster(A, asymA, C, index1, index2)
-
-        # t = 0
-        # ts = 0
-        # Np = np.ceil(self.eta * self.Nc)
-        # while (self.Nc > 15) and (minLoss!=-float('Inf')) :
-        # total_minLoss = []
         total_minLoss = np.zeros(20)
         total_minLoss[0] = 10000
         while (self.Nc>3) and (minLoss<-0.08) and (~np.isinf(minLoss)):
-        #     t += 1
-        #     print self.Nc
-        # while (self.Nc > 2):
             index1, index2,minLoss = self.find_closest_clusters(A)
             A, asymA, C = self.merge_cluster(A, asymA, C, index1, index2)
             total_C[str(self.Nc)] = deepcopy(C)
             total_minLoss[self.Nc] = minLoss
-
-
-        # for loss_idx in range(2,19):
-        #     minloss = total_minLoss[loss_idx]
-        #     next_minloss = total_minLoss[loss_idx+1]
-        #     if minloss< -0.05 or (next_minloss< -1 and minloss>-1 and minloss < 0):
-        #         # pre_minloss_offset = total_minLoss[loss_idx-1]-minloss
-        #         next_minloss_offset = minloss - next_minloss
-        #         rate = next_minloss_offset/abs(minloss)
-        #         if rate > 2 or (minloss< -0.5 and rate >1) :
-        #
-        #             # if minloss <-1:
-        #             #     print loss_idx
-        #             C = total_C[str(loss_idx)]
-        #             break
-        # if loss_idx>5:
-        #     for loss_idx in range(3, 19):
-        #         minloss = total_minLoss[loss_idx]
-        #         if minloss<-0.08:
-        #             C = total_C[str(loss_idx)]
-        #             break
         return C,total_C,total_minLoss
-
-    # def linelabel2grouplabel(self,line_labels,str_label):
 
     def test_k_mean_cluster(self,x, labels, str_labels, s,step):
         self.K = len(np.unique(self.gnd))
@@ -711,22 +680,11 @@ class PG_cluster_Rnn():
         summary_writer.add_summary(model_summ, 0)
         summary_writer.flush()
 
-        # pre_labels_path = FLAGS.log_root+'/pre_group_labels.h5'
-        # str_labels_path = FLAGS.log_root+'/str_labels.h5'
-        # str_labels_hf = h5py.File(str_labels_path,'w')
-        # pre_labels_hf = h5py.File(pre_labels_path,'w')
         step =0
         test_accuracy =0
-        #pre_group_labels =[]
-
-        # right_pre_labels=h5py.File(FLAGS.log_root+'/pre_group_labels22500.h5','r')
-        # right_str_labels = h5py.File(FLAGS.log_root + '/str_labels22500.h5', 'r')
-        # keys = right_pre_labels.keys()
         eval_strokes = None
 
-        #test_data_dir = '/import/vision-datasets001/kl303/PG_data/PG_ndjson/fine_tuning1/'
         test_data_dir = FLAGS.data_dir
-        #all_datasets = self.model_params.all_data_set
         test_datasetes = self.model_params.test_data_set
         datasetes = test_datasetes
         out_put_file = './pre_label/DB/'
@@ -753,59 +711,19 @@ class PG_cluster_Rnn():
 
             average_group+=len(C)
             category_idx = test_idx // 100
-            # print (test_idx)#,len(C)
-            #
+
             category = datasetes[category_idx]
-            if os.path.exists(out_put_file + category) == False:
-                os.mkdir(out_put_file + category)
-            test_file_name = './evaluation/PG_data/test_file/' + category + '.txt'
-            test_f = open(test_file_name, 'r')
-            lines = test_f.readlines()
-            line = lines[np.mod(test_idx, 100)].strip()
-            # print("helllo", np.mod(test_idx, 100))
-            # print("labelsss", sketch_pre_line_labels)
-            # line = lines[category_idx].strip()
-            test_f.close()
-         #   pdb.set_trace()
-            mat_file_name = out_put_file + category + '/' + line[:-4]
-            pre_label2BSR.draw_sketch_with_strokes(eval_strokes[test_idx], sketch_pre_line_labels, mat_file_name)
-            #print str(len(eval_strokes[test_idx]))+' '+str(len(sketch_pre_line_labels))
-            # if os.path.exists(out_put_file + category + '/' + line[:-4]) == False:
-            #     os.mkdir(out_put_file + category + '/' + line[:-4])
-            # for c_key in C_dict.keys():
-            #     C=C_dict[c_key]
-            #     sketch_pre_line_labels = self.get_labels(C)
-            #     sketch_pre_group_labels = line_label2group_label(sketch_pre_line_labels, str_labels[0, :s[0], :s[0]])
-            #     # mat_file_name = out_put_file + category + '/' + line[:-4] +'/'+c_key+ '.mat'
-            #     if os.path.exists('./visual_hard/' + str(test_idx)) == False:
-            #         os.mkdir('./visual_hard/'+str(test_idx))
-            #     svg_name = './visual_hard/' + str(test_idx)+'/'+c_key + '.svg'
-            #     draw_strokes(eval_strokes[test_idx], sketch_pre_group_labels, 1, svg_name)
-                # pre_label2BSR.draw_sketch_with_strokes(eval_strokes[test_idx],sketch_pre_line_labels,mat_file_name)
-
-        # print 'average group number: ',average_group/len(use_set.strokes)
-
-            # print test_idx,len(C),self.K
-            # for key in C_dict.keys():
-            #     C = C_dict[key]
-            #     sketch_pre_line_labels = self.get_labels(C)
-            #     sketch_pre_group_labels = line_label2group_label(sketch_pre_line_labels, str_labels[0, :s[0], :s[0]])
-            #     if os.path.exists('./visual20/'+str(test_idx))==False:
-            #         os.mkdir('./visual20/'+str(test_idx))
-            #     svg_name = './visual20/' + str(test_idx)+'/'+key + '.svg'
-            #     draw_strokes(eval_strokes[test_idx], sketch_pre_group_labels, 1, svg_name)
-            # sketch_pre_line_labels = self.test_k_mean_cluster(x, labels, str_labels, s,step)
-            # sketch_pre_group_labels = line_label2group_label(sketch_pre_line_labels, str_labels[0,:s[0],:s[0]])
-            # svg_name = './visualfold1/'+str(test_idx)+'.svg'
-
-            # str_labels_hf.create_dataset(str(test_idx),data=str_labels[0,:s[0],:s[0]])
-            # pre_labels_hf.create_dataset(str(test_idx),data=sketch_pre_line_labels)
-            # print('step:', test_idx,s[0],len(sketch_pre_group_labels),len(eval_strokes[test_idx]))
-
-        # str_labels_hf.close()
-        # pre_labels_hf.close()
-        # print test_accuracy/len(use_set.strokes)
-
+            if draw_img:
+                if not os.path.exists(out_put_file + category):
+                    os.mkdir(out_put_file + category)
+                test_file_name = './evaluation/PG_data/test_file/' + category + '.txt'
+                test_f = open(test_file_name, 'r')
+                lines = test_f.readlines()
+                line = lines[np.mod(test_idx, 100)].strip()
+                test_f.close()
+                mat_file_name = out_put_file + category + '/' + line[:-4]
+                pre_label2BSR.draw_sketch_with_strokes(eval_strokes[test_idx], sketch_pre_line_labels, mat_file_name)
+        
 
 if __name__ == '__main__':
     PG_cluster_Rnn('umist', RC=True, updateCNN=False, eta=0.2).run()

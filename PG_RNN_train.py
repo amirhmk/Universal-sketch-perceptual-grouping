@@ -16,6 +16,7 @@ import tensorflow as tf
 import model as sketch_rnn_model
 import utils
 import pdb
+from ECCV_JULE.test_PG_cluster import PG_cluster_Rnn
 tf.logging.set_verbosity(tf.logging.INFO)
 
 FLAGS = tf.app.flags.FLAGS
@@ -164,7 +165,7 @@ def get_mixture_coef(output):
     return r
 
 
-def pre_label_com_loss(hps, sequence_lengths, output, ground_labels, str_labels, batch_triplets):
+def pre_label_com_loss(hps,sequence_lengths,output,ground_labels,str_labels,batch_triplets, PG_grouper):
     batch_size = hps.batch_size
     # loss = 0
     accuracy = 0
@@ -172,7 +173,7 @@ def pre_label_com_loss(hps, sequence_lengths, output, ground_labels, str_labels,
     output = tf.reshape(output, [batch_size, hps.max_seq_len, -1])
      # Output shape after:  (100, 300, 128)
     output_shape = output.shape
-
+    # PG_grouper.gnd = grouping_labels[0]
     soft_pre_labels = []
     with tf.variable_scope('logic'):
         logic_w = tf.get_variable(
@@ -277,7 +278,11 @@ def pre_label_com_loss(hps, sequence_lengths, output, ground_labels, str_labels,
                 sketch_cost = tf.concat([sketch_cost, sketch_loss], 0)
                 triplet_cost = tf.concat([triplet_cost, triplet_loss], 0)
             # ,tf.cast(test_loss,dtype=tf.float32)
-            return sketch_cost, triplet_cost, accuracy/batch_size, soft_pre_labels
+            # C, C_dict, min_loss = PG_grouper.recurrent_process(
+            #     str_labels.eval(), sequence_lengths.eval(), pre_labels=soft_pre_labels)
+            # sketch_pre_line_labels = PG_grouper.get_labels(C)
+            # print("sketch_pre_line_labels", sketch_pre_line_labels)
+        return sketch_cost, triplet_cost, accuracy/batch_size, soft_pre_labels
 
 
 def load_dataset(data_dir, model_params, inference_mode=False):
@@ -378,14 +383,22 @@ def evaluate_model(sess, model, data_set):
   """Returns the average weighted cost, reconstruction cost and KL cost."""
   total_g_cost=0.0
   test_ac=0.0
+  PG_grouper = PG_cluster_Rnn(
+      'umist', RC=True, updateCNN=False, eta=0.2, inference_only=True)
+  sketch_loss, triplets_loss, accuracy, out_pre_labels = pre_label_com_loss(
+      model.hps, model.sequence_lengths, model.feat_out, model.labels, model.str_labels, model.triplets, PG_grouper)
+  g_loss = tf.reduce_mean(sketch_loss)
+
+  sess.run(tf.global_variables_initializer())
   for batch in range(data_set.num_batches):
-    unused_orig_x, x,labels,str_labels, s, saliency = data_set.get_batch(batch)
+    unused_orig_x, x,labels,str_labels, s, saliency, grouping_labels = data_set.get_batch(batch)
     feed = {
       model.input_data: x,
       model.sequence_lengths: s,
       model.labels:labels,
       model.str_labels:str_labels,
-      model.saliency: saliency
+      model.saliency: saliency,
+      # model.grouping_labels: grouping_labels
     }
     (g_cost,ac) = sess.run([g_loss,model.accuracy], feed)
 
@@ -450,8 +463,8 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
 
   hps = model.hps
   start = time.time()
-  
-  sketch_loss,triplets_loss, accuracy, out_pre_labels = pre_label_com_loss(hps, model.sequence_lengths,model.feat_out,model.labels, model.str_labels,model.triplets)
+  PG_grouper = PG_cluster_Rnn('umist', RC=True, updateCNN=False, eta=0.2, inference_only=True)
+  sketch_loss,triplets_loss, accuracy, out_pre_labels = pre_label_com_loss(hps, model.sequence_lengths,model.feat_out,model.labels, model.str_labels,model.triplets, PG_grouper)
   g_loss = tf.reduce_mean(sketch_loss)
   t_cost = tf.reduce_mean(triplets_loss)
 
@@ -502,11 +515,11 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
     (triplet_loss,g_cost,train_accuracy, _, pre_labels,train_step, _) = sess.run([
         t_cost, g_loss, accuracy, model.final_state, out_pre_labels, model.global_step, train_op], feed)
     # (_, total_loss, g_cost) = sess.run([train_op, cost, g_cost], feed)
-    # print(g_loss)
-    # print("triplet_loss", triplet_loss)
-    # print("g_cost", g_cost)
-    # print("train_accuracy", train_accuracy)
-    # print("train_step", train_step)
+    print(g_loss)
+    print("triplet_loss", triplet_loss)
+    print("g_cost", g_cost)
+    print("train_accuracy", train_accuracy)
+    print("train_step", train_step)
     if step % 10 == 0 and step > 0:
     #if step % 1 == 0 and step > 0:
       end = time.time()
@@ -610,7 +623,6 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
         summary_writer.add_summary(eval_time_summ, train_step)
         summary_writer.flush()
 
-
 def trainer(model_params,sess):
   """Train a sketch-rnn model."""
   np.set_printoptions(precision=8, edgeitems=6, linewidth=200, suppress=True)
@@ -647,9 +659,9 @@ def trainer(model_params,sess):
 
 def main(unused_argv):
   """Load model params, save config file and start trainer."""
-  sess = tf.Session()
-  default_model_params = sketch_rnn_model.get_default_hparams()
-  trainer(default_model_params,sess)
+  with tf.Session() as sess:
+    default_model_params = sketch_rnn_model.get_default_hparams()
+    trainer(default_model_params,sess)
 
 
 def console_entry_point():

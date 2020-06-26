@@ -99,9 +99,6 @@ def download_pretrained_models(
 
 
 def load_dataset(data_dir, model_params, inference_mode=False):
-  # aug_data_dir ='/import/vision-datasets/kl303/PG_data/svg_fine_tuning/Aug_data/'
-
-
   datasets = model_params.data_set
   model_params.data_set = datasets
   train_strokes = None
@@ -158,7 +155,6 @@ def load_dataset(data_dir, model_params, inference_mode=False):
   sample_model_params.batch_size = 1  # only sample one at a time
   sample_model_params.max_seq_len = 1  # sample one point at a time
 
-  #pdb.set_trace()
   train_set = utils.DataLoader(
       train_strokes,
       model_params.batch_size,
@@ -203,7 +199,7 @@ def evaluate_model(sess, model, data_set):
       model.sequence_lengths: s,
       model.labels:labels,
       model.str_labels:str_labels,
-      model.saliency: saliency
+    #   model.saliency: saliency
     }
     (g_cost,ac) = sess.run([model.g_cost,model.accuracy], feed)
 
@@ -286,7 +282,7 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
         model.labels:labels,
         model.str_labels:seg_labels,
         model.triplets:triplet_label,
-        model.saliency: saliency
+        # model.saliency: saliency
     }
         
     (triplet_loss,g_cost,train_accuracy, _, pre_labels,train_step, _) = sess.run([
@@ -295,9 +291,9 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
     (triplet_loss,g_cost,train_accuracy, _, pre_labels,train_step, _) = sess.run([
         model.triplets_loss,model.g_cost,model.accuracy,model.final_state,model.out_pre_labels,
         model.global_step, model.train_op], feed)
-    print("G_HAT", pre_labels, pre_labels.shape)
+    print("g_cost: ", g_cost)
+    print("train_accuracy: ", train_accuracy)
     if step % 10 == 0 and step > 0:
-    #if step % 1 == 0 and step > 0:
       end = time.time()
       time_taken = end - start
 

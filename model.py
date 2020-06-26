@@ -31,16 +31,13 @@ def copy_hparams(hparams):
 def get_default_hparams():
   """Return default HParams for sketch-rnn."""
   hparams = tf.contrib.training.HParams(
-      # all_data_set = ['airplane','alarm_clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
-      #           'campfire','candle','coffee_up','crab','duck','face','ice-cream','pig','pineapple','suitcase','calculator','angel','bulldozer','drill','flower','house'],
       data_set=['airplane','alarm_clock','ambulance','ant','apple','backpack','basket','butterfly','cactus',
-               'campfire','candle','coffee_cup','crab','duck','face','ice_cream','pig','pineapple','suitcase','calculator'], # Our dataset.
+               'campfire','candle','coffee_cup','crab','duck','face','ice_cream','pig','pineapple','suitcase','calculator'], # SketchX Dataset.
       #teat_data_set = ['airplane','alarm-clock','ambulance','ant','apple'], # 1
       #teat_data_set = ['backpack','basket','butterfly','cactus','campfire'], #2
       # teat_data_set = ['candle','coffee_cup','crab','duck','face'], #3
       # teat_data_set = ['ice-cream','pig','pineapple','suitcase','calculator'], #4
 
-      # teat_data_set=['angel','bulldozer','drill','flower','house'],
       num_steps=100000,  # Total number of steps of training. Keep large.
       save_every=50,  # Number of batches per checkpoint creation.
       max_seq_len=300,  # Not used. Will be changed by model. [Eliminate?]
@@ -199,9 +196,9 @@ class Model(object):
     self.str_labels = tf.placeholder(
         dtype=tf.int32,
         shape=[self.hps.batch_size,self.hps.max_seq_len,self.hps.max_seq_len])
-    self.saliency = tf.placeholder(
-        dtype=tf.float32,
-        shape=[self.hps.batch_size, self.hps.max_seq_len, self.hps.max_seq_len])
+    # self.saliency = tf.placeholder(
+    #     dtype=tf.float32,
+    #     shape=[self.hps.batch_size, self.hps.max_seq_len, self.hps.max_seq_len])
     self.triplets = tf.placeholder(
         dtype=tf.int32,
         shape=[self.hps.batch_size,3,3000]
@@ -404,9 +401,9 @@ class Model(object):
             # reshape_c_g_l is flattened
             # Logits: Unscaled log probabilities of shape [d_0, d_1, ...,, num_classes]
             # Labels: Tensor of shape [d_0, d_1, ..., d_{r-1}]. Each entry in labels must be an index in [0, num_classes)
+            sketch_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(reshape_c_g_l,dtype=tf.int32), logits=logic_wxb)
+            # sketch_loss = tf.keras.losses.sparse_categorical_crossentropy(tf.cast(reshape_c_g_l, dtype=tf.int32), soft_max_logic)
             soft_max_logic = tf.nn.softmax(logic_wxb)
-            # sketch_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(reshape_c_g_l,dtype=tf.int32), logits=logic_wxb)
-            sketch_loss = tf.keras.losses.sparse_categorical_crossentropy(tf.cast(reshape_c_g_l, dtype=tf.int32), soft_max_logic)
 
             # tf.cast(reshape_c_g_l,dtype=tf.int32), soft_max_logic)
             # sketch_loss shape will be the same as labels (Each stroke will have a label)
@@ -471,12 +468,11 @@ class Model(object):
     self.r_cost = tf.reduce_mean(lossfunc)
 
     self.sketch_loss,self.triplets_loss, self.accuracy, self.out_pre_labels = pre_label_com_loss(hps, self.sequence_lengths,feat_out,self.labels, self.str_labels,self.triplets)
-    # self.my_loss,self.accuracy,self.out_pre_labels,test_paramater =pre_label_com_loss(hps,self.sequence_lengths,feat_out,self.labels,self.str_labels)
+
     # Grouping loss
     self.g_cost = tf.reduce_mean(self.sketch_loss)
     # Triplet Loss/Global Grouping
     self.t_cost = tf.reduce_mean(self.triplets_loss)
-    # if self.hps.is_training:
     self.lr = tf.Variable(self.hps.learning_rate, trainable=False)
     optimizer = tf.train.AdamOptimizer(self.lr)
 
@@ -484,6 +480,7 @@ class Model(object):
     # Total Loss
     self.cost = self.g_cost+self.r_cost*self.r_weight+self.t_cost*0.6+self.kl_cost*0.02
 
+    # Grad Clip
     gvs = optimizer.compute_gradients(self.cost)
     g = self.hps.grad_clip
     for grad,var in gvs:

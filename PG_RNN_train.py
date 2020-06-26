@@ -387,7 +387,7 @@ def evaluate_model(sess, model, data_set):
       model.str_labels:str_labels,
       model.saliency: saliency
     }
-    (g_cost,ac) = sess.run([model.g_cost,model.accuracy], feed)
+    (g_cost,ac) = sess.run([g_loss,model.accuracy], feed)
 
     total_g_cost += g_cost
     test_ac +=ac
@@ -475,22 +475,18 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
 
     _, x,labels,seg_labels, s,triplet_label, saliency = train_set.random_batch()
   
-#   lr = tf.Variable(hps.learning_rate, trainable=False)
+    lr = tf.Variable(hps.learning_rate, trainable=False)
 
 
-    train_op = optimizer.minimize(cost)
-    # gvs = optimizer.compute_gradients(cost)
-    # print("cost", gvs)
-    # g = hps.grad_clip
-    # for grad, var in gvs:
-    #     print("welll", grad, var)
-    #     tf.clip_by_value(grad, -g, g)
-    #     print("guess didn't come here")
-    #     # capped_gvs = [(tf.clip_by_value(grad, -g, g), var) for grad, var in gvs]
+    # train_op = optimizer.minimize(cost)
+    gvs = optimizer.compute_gradients(cost)
+    g = hps.grad_clip
+    for grad, var in gvs:
+        tf.clip_by_value(grad, -g, g)
+        capped_gvs = [(tf.clip_by_value(grad, -g, g), var) for grad, var in gvs]
 
-    # print("got here")
-    # train_op = optimizer.apply_gradients(
-    #     capped_gvs, global_step=model.global_step, name='train_step')
+    train_op = optimizer.apply_gradients(
+        capped_gvs, global_step=model.global_step, name='train_step')
     feed = {
         model.input_data: x,
         model.sequence_lengths: s,
@@ -498,7 +494,7 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
         model.labels:labels,
         model.str_labels:seg_labels,
         model.triplets:triplet_label,
-        model.saliency: saliency
+        # model.saliency: saliency
     }
         
     (triplet_loss,g_cost,train_accuracy, _, pre_labels,train_step, _) = sess.run([
@@ -507,7 +503,6 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
         t_cost, g_loss, accuracy, model.final_state, out_pre_labels, model.global_step, train_op], feed)
     # (_, total_loss, g_cost) = sess.run([train_op, cost, g_cost], feed)
     # print(g_loss)
-    # print("fuck yeah buddy", pre_labels[0][0])
     # print("triplet_loss", triplet_loss)
     # print("g_cost", g_cost)
     # print("train_accuracy", train_accuracy)

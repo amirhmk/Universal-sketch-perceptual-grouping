@@ -582,8 +582,7 @@ class PG_cluster_Rnn():
         pre_labels = np.asarray(pre_labels[0][0][0])
         return pre_labels
 
-    def recurrent_process(self, str_labels, s, pre_labels=None, x=None, labels=None):
-
+    def recurrent_process(self, str_labels, s, g, pre_labels=None, x=None, labels=None):
         if not self.inference_mode:
             self.K = len(np.unique(self.gnd))
             feed = {
@@ -606,7 +605,8 @@ class PG_cluster_Rnn():
         real_line_pre_labels = np.take(pre_labels,real_line_index,axis=0)
         print("real_line_index2222", real_line_pre_labels.shape)
         real_line_pre_labels = np.take(real_line_pre_labels, real_line_index, axis=1)
-        self.gnd = np.take(self.gnd,real_line_index)
+        self.K = len(np.unique(g[0]))
+        self.gnd = np.take(g[0],real_line_index)
         self.Ns = len(real_line_pre_labels)
         # print()
 

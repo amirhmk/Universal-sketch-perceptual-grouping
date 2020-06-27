@@ -295,9 +295,9 @@ class DataLoader(object):
       seq_len.append(length)
 
     # We return three things: stroke-3 format, stroke-5 format, list of seq_len.
-    pad_data,pad_labels,pad_str_labels,new_seq_len,batch_triplets, saliency, grouping_labels = self.train_pad_batch(x_batch, self.max_seq_length,seq_len)
+    pad_data,pad_labels,pad_str_labels,new_seq_len,batch_triplets, saliency, grouping_labels, pad_stroke_nums = self.train_pad_batch(x_batch, self.max_seq_length,seq_len)
     #seq_len = np.array(seq_len, dtype=int)
-    return x_batch, pad_data, pad_labels, pad_str_labels, new_seq_len, batch_triplets, saliency
+    return x_batch, pad_data, pad_labels, pad_str_labels, new_seq_len, batch_triplets, saliency, pad_stroke_nums
 
   def test_get_batch_from_indices(self, indices):
     """Given a list of indices, return the potentially augmented batch."""
@@ -476,10 +476,11 @@ class DataLoader(object):
           # grouping_labels.append(
               # self.get_grouping_centers_idx(temp_grouping_matrix))
           ii += 1
+          pad_stroke_nums.append([batch[i][:,3]])
       else:
         # labels: (100, 300, 300)
         # gap_seg_labels: (100, 300, 300)
-        return result, labels, gap_seg_labels, new_seq_len, batch_triplets, saliency, grouping_labels
+        return result, labels, gap_seg_labels, new_seq_len, batch_triplets, saliency, grouping_labels, pad_stroke_nums
 
     
     #return result,labels,gap_seg_labels,new_seq_len

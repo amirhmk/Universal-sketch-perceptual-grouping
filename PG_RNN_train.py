@@ -486,20 +486,12 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
     curr_kl_weight = (hps.kl_weight - (hps.kl_weight - hps.kl_weight_start) *
                       (hps.kl_decay_rate)**(step/3))
 
-    _, x,labels,seg_labels, s,triplet_label, saliency = train_set.random_batch()
+    _, x, labels, seg_labels, s, triplet_label, saliency, pad_stroke_nums = train_set.random_batch()
   
     lr = tf.Variable(hps.learning_rate, trainable=False)
 
 
     # train_op = optimizer.minimize(cost)
-    gvs = optimizer.compute_gradients(cost)
-    g = hps.grad_clip
-    for grad, var in gvs:
-        tf.clip_by_value(grad, -g, g)
-        capped_gvs = [(tf.clip_by_value(grad, -g, g), var) for grad, var in gvs]
-
-    train_op = optimizer.apply_gradients(
-        capped_gvs, global_step=model.global_step, name='train_step')
     feed = {
         model.input_data: x,
         model.sequence_lengths: s,
@@ -515,6 +507,22 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
     (triplet_loss,g_cost,train_accuracy, _, pre_labels,train_step, _) = sess.run([
         t_cost, g_loss, accuracy, model.final_state, out_pre_labels, model.global_step, train_op], feed)
     # (_, total_loss, g_cost) = sess.run([train_op, cost, g_cost], feed)
+    C, C_dict, min_loss = PG_grouper.recurrent_process(
+        seg_labels, s, pad_stroke_nums, pre_labels=pre_labels)
+    sketch_pre_line_labels = PG_grouper.get_labels(C)
+    print("sketch_pre_line_labels", sketch_pre_line_labels)
+            # print("sketch_pre_line_labels", sketch_pre_line_labels)
+    
+    gvs = optimizer.compute_gradients(cost)
+    g = hps.grad_clip
+    for grad, var in gvs:
+        tf.clip_by_value(grad, -g, g)
+        capped_gvs = [(tf.clip_by_value(grad, -g, g), var)
+                      for grad, var in gvs]
+
+    train_op = optimizer.apply_gradients(
+        capped_gvs, global_step=model.global_step, name='train_step')
+  
     print(g_loss)
     print("triplet_loss", triplet_loss)
     print("g_cost", g_cost)

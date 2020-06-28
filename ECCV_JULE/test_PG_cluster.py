@@ -594,16 +594,13 @@ class PG_cluster_Rnn():
 
             group_matrix = self.model.out_pre_labels
             pre_labels,accuracy = self.sess.run([group_matrix,self.model.accuracy], feed)
-        print(pre_labels)
         pre_labels = np.asarray(pre_labels[0][0])
         if len(pre_labels.shape)==1:
             pre_labels = np.reshape(pre_labels,[s[0],s[0]])
         str_label = str_labels[0,:s[0],:s[0]]
 
         real_line_index = np.where(str_label[:, 1] == 1)[0]
-        print("real_line_index", pre_labels.shape)
         real_line_pre_labels = np.take(pre_labels,real_line_index,axis=0)
-        print("real_line_index2222", real_line_pre_labels.shape)
         real_line_pre_labels = np.take(real_line_pre_labels, real_line_index, axis=1)
         self.K = len(np.unique(g[0]))
         self.gnd = np.take(g[0],real_line_index)
@@ -614,7 +611,6 @@ class PG_cluster_Rnn():
         if self.Ks>=len(real_line_pre_labels):
             self.Ks=len(real_line_pre_labels)-2
         #pdb.set_trace()
-        print("where is this", len(real_line_pre_labels), self.Ks)
         sortedDis, indexDis = self.get_Dis(real_line_pre_labels, self.Ks)
         group_labels = self.clusters_init(indexDis)
         C = self.get_C(group_labels)

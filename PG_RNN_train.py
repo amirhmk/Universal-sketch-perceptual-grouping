@@ -510,7 +510,10 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
     C, C_dict, min_loss = PG_grouper.recurrent_process(
         seg_labels, s, pad_stroke_nums, pre_labels=pre_labels)
     sketch_pre_line_labels = PG_grouper.get_labels(C)
-    print("sketch_pre_line_labels", sketch_pre_line_labels)
+    print("sketch_pre_line_labels", sketch_pre_line_labels.shape, s, x.shape)
+    print("Groupings and loss", C, C_dict, min_loss)
+
+    # cost += (cost)
             # print("sketch_pre_line_labels", sketch_pre_line_labels)
     
     gvs = optimizer.compute_gradients(cost)
@@ -523,7 +526,6 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
     train_op = optimizer.apply_gradients(
         capped_gvs, global_step=model.global_step, name='train_step')
   
-    print(g_loss)
     print("triplet_loss", triplet_loss)
     print("g_cost", g_cost)
     print("train_accuracy", train_accuracy)

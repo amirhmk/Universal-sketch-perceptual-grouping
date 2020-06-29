@@ -43,7 +43,7 @@ def draw_sketch_with_strokes(data,stroke_group,evaluate_file_path):
     abspoints=data2abspoints(data)
     unique_stroke_group = np.unique(stroke_group)
     bsd_data = np.zeros((256,256),dtype=np.uint8)
-    # image_data = np.zeros((256,256),dtype=np.uint8)+255
+    image_data = np.zeros((256,256),dtype=np.uint8)+255
 
     for group_idx in unique_stroke_group:
         stroke_svg_name = str(group_idx)+'.svg'
@@ -65,6 +65,6 @@ def draw_sketch_with_strokes(data,stroke_group,evaluate_file_path):
         os.remove(stroke_png_name)
         # fg_idx = np.where(stroke_data<25)[0]
         bsd_data[stroke_data<245] = group_idx+1
-        # image_data[stroke_data<245] = 0
-    # cv2.imwrite(img_file_name,image_data)
-    scio.savemat(evaluate_file_path,{'label_matrix':bsd_data})
+        image_data[stroke_data<245] = 0
+    cv2.imwrite(evaluate_file_path + ".png", image_data)
+    scio.savemat(evaluate_file_path + ".mat", {'label_matrix': bsd_data})

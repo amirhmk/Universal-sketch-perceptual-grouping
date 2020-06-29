@@ -259,7 +259,6 @@ class PG_cluster_Rnn():
     iter_cnn = 0
 
     def __init__(self, dataset, RC=True, updateCNN=True, eta=0.9, inference_only=False):
-
         if not inference_only:
             self.sess = tf.InteractiveSession()
 
@@ -285,9 +284,6 @@ class PG_cluster_Rnn():
             self.test_set = datasets[2]
             model_params = datasets[3]
             eval_model_params = datasets[4]
-
-            # self.train_set = datasets[0]
-            # model_params = datasets[1]
 
             self.model = sketch_rnn_model.Model(model_params)
             self.eval_model = sketch_rnn_model.Model(eval_model_params, reuse=True)
@@ -343,26 +339,8 @@ class PG_cluster_Rnn():
 
     def get_Dis(self, fea, k):
         # Calculate Dis
-        # self.logger.info('%.2f s, Begin to fit neighbour graph', timeit.default_timer() - self.tic)
         neigh = NearestNeighbors(n_neighbors=k, n_jobs=-1).fit(fea)
-        # self.logger.info('%.2f s, Finished fitting, begin to calculate Dis', timeit.default_timer() - self.tic)
         sortedDis, indexDis = neigh.kneighbors()
-        # self.logger.info('%.2f s, Finished the calculation of Dis', timeit.default_timer() - self.tic)
-        # mul_values = np.matmul(fea, (fea.T))
-        # np.fill_diagonal(mul_values, -1)
-        # # cos_dis = []
-        # sortedDis = []
-        # indexDis = []
-        # for idx,line_cos_dis in enumerate(mul_values):
-        #     A_model = np.linalg.norm(fea[idx])
-        #     B_models = np.linalg.norm(fea,axis=1)
-        #     norm_cos_dis = line_cos_dis/(A_model*B_models)
-        #     sort_dis = -np.sort(-norm_cos_dis)
-        #     index_dis = np.argsort(-norm_cos_dis)
-        #     sortedDis.append(list(sort_dis[:-1]))
-        #     indexDis.append(list(index_dis[:-1]))
-            # cos_dis.append(norm_cos_dis)
-
 
         return np.asarray(sortedDis), np.asarray(indexDis)
 
@@ -382,14 +360,11 @@ class PG_cluster_Rnn():
             # self.logger.info('%.2f s, Calculating A..., i: %d', timeit.default_timer() - self.tic, i)
             for j in range(i):
                 if np.size(C[j], 0) != 0:
-                    # asymA[i, j] = np.dot(np.sum(W[C[i], :][:, C[j]], 0), np.sum(W[C[j], :][:, C[i]], 1))  # A(Ci -> Cj)
                     asymA[i, j] = np.dot(np.sum(W[C[i], :][:, C[j]], 0), np.sum(W[C[j], :][:, C[i]], 1)) / math.pow(
                         np.size(C[j], 0), 2)  # A(Ci -> Cj)
                 if np.size(C[i], 0) != 0:
-                    # asymA[j, i] = np.dot(np.sum(W[C[j], :][:, C[i]], 0), np.sum(W[C[i], :][:, C[j]], 1))  # A(Cj -> Ci)
                     asymA[j, i] = np.dot(np.sum(W[C[j], :][:, C[i]], 0), np.sum(W[C[i], :][:, C[j]], 1)) / math.pow(
                         np.size(C[i], 0), 2)  # A(Cj -> Ci)
-                # A[i, j] = asymA[i, j]/math.pow(np.size(C[j], 0), 2) + asymA[j, i]/ math.pow(np.size(C[i], 0), 2)
                 A[i, j] = asymA[i, j] + asymA[j, i]
                 A[j, i] = A[i, j]
 
@@ -441,7 +416,6 @@ class PG_cluster_Rnn():
             K = 4
         else:
             K = len(A) -1
-        # print("SHAPEEEE", A.shape)
         indexA = A.argsort(axis=1)[:, ::-1][:, 0: K]
         sortedA = np.sort(A, axis=1)[:, ::-1][:, 0: K]
 
@@ -470,7 +444,6 @@ class PG_cluster_Rnn():
         asymA[minIndex1, 0: self.Nc] = asymA[minIndex1, 0: self.Nc] + asymA[minIndex2, 0: self.Nc]
         len1 = np.size(cluster1, 0)
         len2 = np.size(cluster2, 0)
-        # asymA[0: self.Nc, minIndex1] = (asymA[0: self.Nc, minIndex1] * len1 + asymA[0: self.Nc, minIndex2] * len2) / (len1 + len2)
         asymA[0 : self.Nc, minIndex1] = asymA[0 : self.Nc, minIndex1] * (1 + self.alpha) * math.pow(len1, 2) / math.pow(len1 + len2, 2)\
                 + asymA[0 : self.Nc, minIndex2] *(1 + self.alpha) * math.pow(len2, 2) / math.pow(len1 + len2, 2)
         asymA[minIndex1, minIndex1] = 0
@@ -582,11 +555,11 @@ class PG_cluster_Rnn():
         pre_labels = np.asarray(pre_labels[0][0][0])
         return pre_labels
 
-    def recurrent_process(self, str_labels, s, g, pre_labels=None, x=None, labels=None):
+    def recurrent_process(self, str_labels, sequence_len, stroke_groupings, idx, pre_labels=None, x=None, labels=None):
         if not self.inference_mode:
             self.K = len(np.unique(self.gnd))
             feed = {
-                self.model.sequence_lengths: s,
+                self.model.sequence_lengths: sequence_len,
                 self.model.input_data: x,
                 self.model.labels: labels,
                 self.model.str_labels: str_labels
@@ -594,23 +567,23 @@ class PG_cluster_Rnn():
 
             group_matrix = self.model.out_pre_labels
             pre_labels,accuracy = self.sess.run([group_matrix,self.model.accuracy], feed)
-        pre_labels = np.asarray(pre_labels[0][0])
+        pre_labels = np.asarray(pre_labels[idx][0])
         if len(pre_labels.shape)==1:
-            pre_labels = np.reshape(pre_labels,[s[0],s[0]])
-        str_label = str_labels[0,:s[0],:s[0]]
+            pre_labels = np.reshape(
+                pre_labels, [sequence_len[idx], sequence_len[idx]])
+        str_label = str_labels[idx, :sequence_len[idx], :sequence_len[idx]]
 
         real_line_index = np.where(str_label[:, 1] == 1)[0]
         real_line_pre_labels = np.take(pre_labels,real_line_index,axis=0)
         real_line_pre_labels = np.take(real_line_pre_labels, real_line_index, axis=1)
-        self.K = len(np.unique(g[0]))
-        self.gnd = np.take(g[0],real_line_index)
+        self.K = len(np.unique(stroke_groupings[idx]))
+        # Not used!
+        # self.gnd = np.take(g[idx],real_line_index)
         self.Ns = len(real_line_pre_labels)
-        # print()
 
 
         if self.Ks>=len(real_line_pre_labels):
             self.Ks=len(real_line_pre_labels)-2
-        #pdb.set_trace()
         sortedDis, indexDis = self.get_Dis(real_line_pre_labels, self.Ks)
         group_labels = self.clusters_init(indexDis)
         C = self.get_C(group_labels)

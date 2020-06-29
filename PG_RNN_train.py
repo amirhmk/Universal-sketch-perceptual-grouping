@@ -17,6 +17,7 @@ import model as sketch_rnn_model
 import utils
 import pdb
 from ECCV_JULE.test_PG_cluster import PG_cluster_Rnn
+from ECCV_JULE.pre_label2BSR import draw_sketch_with_strokes
 tf.logging.set_verbosity(tf.logging.INFO)
 
 FLAGS = tf.app.flags.FLAGS
@@ -507,13 +508,14 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
     (triplet_loss,g_cost,train_accuracy, _, pre_labels,train_step, _) = sess.run([
         t_cost, g_loss, accuracy, model.final_state, out_pre_labels, model.global_step, train_op], feed)
     # (_, total_loss, g_cost) = sess.run([train_op, cost, g_cost], feed)
-    C, C_dict, min_loss = PG_grouper.recurrent_process(
-        seg_labels, s, pad_stroke_nums, pre_labels=pre_labels)
-    sketch_pre_line_labels = PG_grouper.get_labels(C)
-    print("sketch_pre_line_labels", sketch_pre_line_labels.shape, s, x.shape)
-    print("Groupings and loss", C, C_dict, min_loss)
-
-    # cost += (cost)
+    for i in range(len(pre_labels)):
+      C, C_dict, min_loss = PG_grouper.recurrent_process(
+           seg_labels, s, pad_stroke_nums, i, pre_labels=pre_labels)
+      sketch_pre_line_labels = PG_grouper.get_labels(C)
+      draw_sketch_with_strokes(x[i], sketch_pre_line_labels,str(i))
+    # print("sketch_pre_line_labels", sketch_pre_line_labels.shape, s, x.shape)
+    # print("Groupings and loss", C, C_dict, min_loss)
+    # cost = tf.math.add(cost, 1000)
             # print("sketch_pre_line_labels", sketch_pre_line_labels)
     
     gvs = optimizer.compute_gradients(cost)
@@ -525,7 +527,7 @@ def train(sess, model, eval_model, train_set, valid_set, test_set,saver):
 
     train_op = optimizer.apply_gradients(
         capped_gvs, global_step=model.global_step, name='train_step')
-  
+    # print(GraphKeys.TRAINABLE_VARIABLES)
     print("triplet_loss", triplet_loss)
     print("g_cost", g_cost)
     print("train_accuracy", train_accuracy)

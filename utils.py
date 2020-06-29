@@ -476,7 +476,6 @@ class DataLoader(object):
           # grouping_labels.append(
               # self.get_grouping_centers_idx(temp_grouping_matrix))
           ii += 1
-          pad_stroke_nums.append([batch[i][:,3]])
       else:
         # labels: (100, 300, 300)
         # gap_seg_labels: (100, 300, 300)
